@@ -132,8 +132,24 @@ cd backend && go generate ./ent
 跑测试：
 
 ```bash
-cd backend && go test ./...
+cd backend && go test ./...      # 不需要数据库，需要数据库的那几条会自动跳过
 ```
+
+`internal/scheduler` 里有几条**必须连真实 PostgreSQL** 的测试——它们针对的是
+读-改-写丢更新，只有并发事务真的跑起来才暴露得出来，用假的客户端测不出来。
+没设 `CMD2API_TEST_DATABASE_URL` 时它们会跳过并打印跑法。注意 postgres 在
+compose 里是**故意不对外映射端口**的，所以从宿主机直连不上，得把测试跑在
+compose 网络里：
+
+```bash
+docker compose exec -T postgres createdb -U cmd2api cmd2api_test   # 单独建库
+docker build --target backend -t cmd2api-be-test .
+docker run --rm --network cmd2api_cmd2api \
+  -e CMD2API_TEST_DATABASE_URL="host=postgres port=5432 user=cmd2api password=$DB_PASSWORD dbname=cmd2api_test sslmode=disable" \
+  cmd2api-be-test sh -c "cd /src/backend && go test ./internal/scheduler/ -v"
+```
+
+那几条测试每轮都会清空目标库的 `accounts` 表，所以务必用单独建的库。
 
 单元测试之外还有一个端到端冒烟脚本，对着**真的跑起来的服务**发请求，覆盖登录、
 分组、账号、API Key、中转入口这些串起来才看得出的路径：
@@ -346,6 +362,27 @@ host 变空、query 丢掉，密钥就找不到了。只在第一个 `?` 处切�
 登录入口。只凭一个已登录的令牌就允许改，等于把"令牌被偷"升级成"账号被永久
 接管"——密码是这道门唯一的把手。改完必须发一把新令牌，因为 email 写在 JWT 声明
 里，不换的话本地存的令牌会一直带着旧邮箱。
+
+**账号状态回写一律用条件更新，不做读-改-写。**
+`internal/scheduler` 的那一节状态回写（`MarkUsed` / `MarkRateLimited` /
+`MarkOverloaded` / `MarkFailure`）都按 `accountID` 条件更新。这不是风格问题：
+同一个账号被打回失败时，并发请求会同时进来，"查出来 +1 再写回去"会让两个请求
+都读到 N、都写回 N+1，一次失败就这么丢了。
+
+`MarkFailure` 原来正是这么写的——跟它自己那一节的注释自相矛盾。后果是
+`consecutive_failures` 明显少算（实测 60 次并发失败只记下 5 次），而**自动禁用
+这条兜底恰恰是"没人盯也能停掉坏账号"的唯一保障**，它晚触发甚至不触发，坏账号就
+一直留在池子里接着挨撞。现在改成原子自增，禁用判断和写入放进同一条 UPDATE、
+条件里带"阈值已越过"且"还没被禁用"，于是那个转换有且只有一次。
+
+这一类 bug 用假的 ent 客户端测不出来——丢更新恰恰是"两个事务真的同时跑"才发生
+的。所以 `internal/scheduler/concurrency_test.go` 连真实 PostgreSQL，没设
+`CMD2API_TEST_DATABASE_URL` 就跳过并打印跑法。它是验过有效性的：把 `MarkFailure`
+还原成读-改-写那版，测试立刻报 `并发记了 60 次失败，计数却是 5`。
+
+顺带修的两处：`HEALTH_FAILURE_THRESHOLD` 配成 0 或负数会让比较式恒真、账号抖一下
+就被停掉，构造函数现在钳到 1；`applyAccountPenalty` 里 `IsAuthFailure` 和 default
+两个分支代码一模一样，那个 case 只会让查问题的人以为认证失败有特殊处理。
 
 ---
 

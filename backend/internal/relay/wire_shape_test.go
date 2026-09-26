@@ -74,14 +74,25 @@ func TestSessionIDsAgreeAcrossRequests(t *testing.T) {
 		bodySession   string
 	}
 	got := map[string]*captured{}
+	// 两个预请求是并发发出去的，而 http.Handler 跑在各自的 goroutine 上。
+	// 不加这把锁，这个测试大约每十几次就会撞一次 "concurrent map writes"——
+	// 那是个 fatal error，整个包的测试一起挂掉。它是测试自己的毛病，不是被测
+	// 代码的：被测代码那侧每次请求只碰自己的局部变量。
+	//
+	// 锁**只包住查表那两行**，不包住整个 handler：包住了就等于把两个预请求
+	// 串行化，而「同一账号全程只有一个会话 ID」这条断言要的正是它们真并发。
+	// 掩掉并发等于把这条测试测没了。
+	var mu sync.Mutex
 
 	client, _ := newBalanceTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
+		mu.Lock()
 		c := got[r.URL.Path]
 		if c == nil {
 			c = &captured{}
 			got[r.URL.Path] = c
 		}
+		mu.Unlock()
 		c.headerSession = r.Header.Get("x-session-id")
 
 		if r.URL.Path == "/alpha/lifecycle-events" {

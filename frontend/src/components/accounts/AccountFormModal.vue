@@ -229,7 +229,7 @@ function close(): void {
  *     打不开的地址粘进来。这时回调从没被访问过，state 还挂着，所以后端能
  *     用粘回来的 state 认出是哪次握手、沿用上面填的那些字段。
  */
-type OAuthPhase = 'idle' | 'waiting' | 'blocked'
+type OAuthPhase = 'idle' | 'waiting' | 'copyback'
 
 const oauthPhase = ref<OAuthPhase>('idle')
 const oauthState = ref('')
@@ -239,8 +239,11 @@ const oauthCallbackUrl = ref('')
  *
  * studio 只接受 localhost 的回调地址（它自己的授权页上写着 "Only localhost
  * URLs are allowed for security"，判不过就整页换成 Invalid Request）。面板装在
- * 远程服务器上时回调必然是远程域名，于是授权页根本进不去——不是我们收不到
- * 结果，是走不到那一步。所以这里要分清，才好给对引导。
+ * 远程服务器上时回调必然是远程域名，所以后端会改成递一个**没人监听的**
+ * localhost 地址进去，让 studio 那一下打空、退回到它自己的「复制密钥」页。
+ *
+ * 这个标志因此决定的是收尾方式，不是「能不能用」：
+ * 真 → 自动跳回来；假 → 用户从 studio 页面上把密钥抄回来。
  */
 const oauthCallbackIsLoopback = ref(true)
 const oauthError = ref('')
@@ -313,13 +316,17 @@ async function startOAuth(): Promise<void> {
     oauthPaste.value = ''
 
     if (!oauthCallbackIsLoopback.value) {
-      // 这一趟注定走不通，而且不是「可能失败」而是「一定失败」：studio 的
-      // 授权页会先把回调地址判一遍，不是 localhost 就整页换成 Invalid
-      // Request，用户连选账号的那个界面都见不到。
+      // 面板不在本机：studio 那一下 POST 是打到用户自己机器的回环地址上的，
+      // 我们收不到。所以这趟是「抄回来」而不是「跳回来」——studio 在打空之后
+      // 会自己跳到一页把密钥显示出来让用户复制，用户粘回下面那个框。
       //
-      // 那就别开那个标签页了——开出去只会让人对着一个英文报错页发愣，
-      // 还得回来问「这是哪一步错了」。把原因和两条能走的路直接摆在眼前。
-      oauthPhase.value = 'blocked'
+      // 标签页照样要开：授权页本身是能正常进的（后端已经把一个 studio 认得的
+      // localhost 回调递了过去），只是收尾那一步换了个方式。
+      oauthPhase.value = 'copyback'
+      const copyTab = window.open(result.auth_url, '_blank', 'noopener')
+      if (!copyTab) {
+        window.location.assign(result.auth_url)
+      }
       return
     }
 
@@ -579,54 +586,73 @@ async function submit(): Promise<void> {
             </div>
 
             <!--
-              回调地址不指向本机。这不是「可能失败」，是「一定失败」：studio
-              判完回调地址就把整页换掉了，用户连授权界面都见不到。所以不开
-              那个标签页，直接把原因和两条能走的路说清楚。
+              面板不在本机：收尾方式从「跳回来」变成「抄回来」。
+
+              后端已经把回调地址换成了一个没人监听的 localhost 地址，studio
+              因此会放行（它只认 localhost），登录、选账号、授权这些步骤一步
+              不少；只是最后那一下 POST 打在用户自己机器的空端口上，打不通，
+              studio 于是跳到它自己的「Copy your API key」页把密钥显示出来。
+              用户复制，粘回下面这个框，走的是同一条 /complete。
             -->
             <div
-              v-else-if="oauthPhase === 'blocked'"
-              class="mt-2 space-y-2 rounded-md border border-line bg-raised px-2.5 py-2.5"
+              v-else-if="oauthPhase === 'copyback'"
+              class="mt-2 space-y-2.5 rounded-md border border-line bg-raised px-2.5 py-2.5"
             >
               <div class="flex items-start gap-2">
-                <Icon name="alertCircle" :size="13" class="mt-0.5 shrink-0 text-danger" />
+                <Icon name="external" :size="13" class="mt-0.5 shrink-0 text-accent" />
                 <div class="min-w-0 flex-1">
                   <p class="text-2xs font-medium text-fg">
-                    用当前这个地址打不开浏览器登录
+                    已在新标签页打开登录页
                   </p>
                   <p class="mt-0.5 text-2xs leading-relaxed text-subtle">
-                    Command Code 的授权页只接受
-                    <code class="font-mono">localhost</code> 的回调地址。面板不在你
-                    本机上时，回调地址只能是这个域名，它会直接把整页换成
-                    「Invalid Request」，授权界面根本进不去。两条路可以走：
+                    面板不在你本机上，Command Code 没法把结果直接交回来
+                    （它的授权页只接受
+                    <code class="font-mono">localhost</code> 的回调）。所以最后
+                    一步得你搭把手：
                   </p>
                 </div>
               </div>
 
               <ol class="ml-4 list-decimal space-y-1.5 text-2xs leading-relaxed text-subtle">
+                <li>在新标签页里登录并授权。</li>
                 <li>
-                  <strong class="font-medium text-muted">把面板映射到本机再试</strong>
-                  ：在你自己电脑上开一条 SSH 隧道，然后用
-                  <code class="font-mono">http://127.0.0.1:8080</code> 打开面板。
-                  那时回调地址就是 localhost，整条链路会自己走通
-                  <span class="block font-mono text-subtle">
-                    ssh -L 8080:127.0.0.1:8080 用户名@服务器地址
-                  </span>
-                  <span class="block">
-                    本地 8080 被别的东西占着（比如你自己也跑着一个 cmd2api）就换个
-                    端口：<code class="font-mono">-L 18080:127.0.0.1:8080</code>，
-                    然后开
-                    <code class="font-mono">http://127.0.0.1:18080</code>。
-                    端口是几都行，只要是 127.0.0.1 就打得到。
-                  </span>
+                  完事后 Command Code 会显示一页
+                  <strong class="font-medium text-muted">「Copy your API key」</strong>，
+                  点上面的复制按钮。
                 </li>
-                <li>
-                  <strong class="font-medium text-muted">直接粘一把密钥</strong>：去
-                  Command Code 后台的 API Keys 页面复制一把 key，填在上面的「密钥」
-                  框里——两条路拿到的是同一种密钥，效果一样。
-                </li>
+                <li>把它粘到下面，点「完成」。粘整页内容也行，这里只要那串密钥。</li>
               </ol>
 
-              <Button variant="ghost" size="sm" @click="cancelOAuth">知道了</Button>
+              <div class="space-y-2">
+                <Textarea
+                  v-model="oauthPaste"
+                  :rows="2"
+                  placeholder="粘贴 Copy your API key 页面上的那串密钥"
+                  @keydown.enter.exact.prevent="completeOAuthManually"
+                />
+                <div class="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    :loading="oauthPasting"
+                    :disabled="!oauthPaste.trim()"
+                    @click="completeOAuthManually"
+                  >
+                    完成
+                  </Button>
+                  <Button variant="ghost" size="sm" @click="cancelOAuth">取消</Button>
+                </div>
+              </div>
+
+              <p v-if="oauthError" class="text-2xs leading-relaxed text-danger">
+                {{ oauthError }}
+              </p>
+
+              <p class="text-2xs leading-relaxed text-subtle">
+                嫌这一步麻烦的话：在你自己电脑上开一条 SSH 隧道，用
+                <code class="font-mono">http://127.0.0.1:8080</code>
+                打开面板，这条链路就会自己走通，不用复制粘贴。本地 8080 被占着
+                就换个端口，端口是几都行。
+              </p>
             </div>
 
             <!-- 等另一个标签页里那次授权的结果 -->
@@ -657,6 +683,9 @@ async function submit(): Promise<void> {
 
               <!--
                 手动那条路。默认折叠着：正常情况下用不上，摊开只会让人以为要填。
+
+                什么时候用得上：自动那一步没走完（比如中途关了标签页、或者
+                studio 那边 fetch 超时），但密钥已经在屏幕上显示出来了。
               -->
               <details class="group">
                 <summary
@@ -664,22 +693,22 @@ async function submit(): Promise<void> {
                 >
                   <span class="inline-flex items-center gap-1">
                     <Icon name="chevronRight" :size="12" class="group-open:rotate-90" />
-                    手里已经有一条回调地址，或者一把密钥？
+                    密钥已经显示出来了？
                   </span>
                 </summary>
 
                 <div class="mt-2 space-y-2">
                   <p class="text-2xs leading-relaxed text-subtle">
-                    整条回调地址和一把裸密钥都收。地址里带
-                    <code class="font-mono">apiKey</code> 的旧格式可以，只粘那串
-                    <code class="font-mono">user_</code> 密钥也可以；这里会先校验
-                    再建号，建不出来不会留下半个账号。
+                    把 Command Code 那页「Copy your API key」上的密钥粘到这里。
+                    整段文字粘进来也行——这里只认其中那串
+                    <code class="font-mono">user_</code> 密钥。粘进来会先拿去
+                    校验再建号，校验不过不会留下半个账号。
                   </p>
                   <Textarea
                     v-model="oauthPaste"
                     :rows="2"
                     :mono="true"
-                    placeholder="https://…/callback?apiKey=...&state=... 或直接粘 user_..."
+                    placeholder="粘贴 user_ 开头的那串密钥"
                   />
                   <div class="flex flex-wrap items-center gap-2">
                     <Button

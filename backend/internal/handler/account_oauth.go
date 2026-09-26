@@ -261,6 +261,7 @@ func (h *Handler) StartAccountOAuth(c *gin.Context) {
 			"无法确定回调地址，请检查请求的 Host 头，或用 PUBLIC_BASE_URL 显式指定")
 		return
 	}
+	loopback := isLoopbackBase(callbackURL)
 
 	var adminID int64
 	if claims, ok := middleware.AdminClaimsFrom(c); ok {
@@ -283,18 +284,44 @@ func (h *Handler) StartAccountOAuth(c *gin.Context) {
 		},
 	})
 
+	// 交给 studio 的回调地址不一定是「我们的」地址，见 oauthCopyBackCallback。
+	studioCallback := callbackURL
+	if !loopback {
+		studioCallback = oauthCopyBackCallback
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"auth_url":     relay.CommandCodeAuthURL(callbackURL, state),
+		"auth_url":     relay.CommandCodeAuthURL(studioCallback, state, loopback),
 		"callback_url": callbackURL,
 		"expires_at":   expires.Format(time.RFC3339),
-		// 回调地址指不指向本机，决定了这趟授权有没有可能自动收尾：studio
-		// 只接受 localhost 的回调。前端拿它决定给哪一种引导，见 isLoopbackBase。
-		"callback_is_loopback": isLoopbackBase(callbackURL),
+		// 回调地址指不指向本机，决定了这趟授权是「跳回来」还是「抄回来」：
+		// studio 只接受 localhost 的回调。前端拿它决定给哪一种引导，见
+		// isLoopbackBase。
+		"callback_is_loopback": loopback,
 		// state 回给前端，让它能轮询「好了没」。这不算额外泄漏：它就藏在
 		// auth_url 里，而 auth_url 本来就要交给这个页面去跳转。
 		"state": state,
 	})
 }
+
+// oauthCopyBackCallback 是面板不在本机时，我们交给 studio 的回调地址。
+//
+// 它**故意**是一个没人监听的地址：studio 只接受 localhost 的回调，而面板在
+// 远程服务器上时，回调地址必然是个远程域名，studio 会把整页换成 Invalid
+// Request——用户连选账号的界面都见不到（这正是这个常量存在的理由）。
+//
+// 所以干脆给它一个真的 localhost 地址，但那个端口上什么都没有。配合不带
+// mode=redirect，studio 的 fetch 会打空，然后它自己退回到
+// /studio/auth/cli/fallback，那一页会把密钥明明白白显示出来让用户复制
+// （"Copy your API key"）。用户抄回面板，走的是同一条 /complete。
+//
+// 这不是绕过 studio 的检查，是照着它自己的设计走：那条回落路径就是官方 CLI
+// 在本地服务没起来时的正常归宿。
+//
+// 端口是挑的：**不能**是面板常用的 8080——本机自己跑着一个 cmd2api 是很常见
+// 的情况，挑中了就等于把密钥送到另一个实例上，在那台机器上建出一个谁也说不
+// 清的账号。47821 落在动态端口区间里，且不属于任何常见服务。
+const oauthCopyBackCallback = "http://127.0.0.1:47821/callback"
 
 // isLoopbackBase 判断一个地址是不是指向本机。
 //

@@ -26,13 +26,23 @@ const commandCodeStudioBaseURL = "https://commandcode.ai"
 // 个输入方式。
 //
 // callbackURL 必须是绝对地址，studio 拿到的是个完整 URL。
-func CommandCodeAuthURL(callbackURL, state string) string {
+func CommandCodeAuthURL(callbackURL, state string, redirectMode bool) string {
 	q := url.Values{}
 	q.Set("callback", callbackURL)
 	q.Set("state", state)
-	// mode=redirect 才是「把浏览器跳回来」。不带这个参数时 studio 走的是
-	// POST JSON 那条老路径，那条要配合 CORS 响应头，对浏览器直连更麻烦。
-	q.Set("mode", "redirect")
+	// mode=redirect 才是「把浏览器跳回来」：studio 拿它决定把结果当成一次
+	// 顶层表单提交打进 callback，还是改用 fetch 发 JSON。
+	//
+	// 两种都留着，因为它们的失败姿势不一样，而我们要的正是那个失败姿势：
+	//
+	//   - 带 mode=redirect：POST 打不通就是浏览器停在一个打不开的页面上，
+	//     没有任何救回来的余地。回调地址真有人接时才用。
+	//   - 不带：fetch 打不通时 studio 会把密钥显示在 /studio/auth/cli/fallback
+	//     上让用户复制。面板在远程、我们收不到那一下时，这条路能把密钥交到
+	//     用户手里——链路从「跳回来」变成「抄回来」，其余一步不少。
+	if redirectMode {
+		q.Set("mode", "redirect")
+	}
 	return commandCodeStudioBaseURL + "/studio/auth/cli?" + q.Encode()
 }
 

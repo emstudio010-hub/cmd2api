@@ -50,26 +50,30 @@ def uniq(base):
     return u"%s-%s" % (base, RUN_ID)
 
 
-def call(method, path, body=None, token=None, raw=False, literally=None, content_type=None):
+def call(method, path, body=None, token=None, raw=False, literally=None, content_type=None,
+         headers=None):
     """发一个请求，返回 (status, parsed_body)。
 
     body 走 JSON；literally 是原样发出的字节，配 content_type 用——
     授权回调是 studio 用表单 POST 过来的，那条路必须按它真实的形状测，
     用 JSON 发一遍测不到解析表单的那段代码。
+
+    headers 用来覆写/追加请求头，主要是伪造 Host：面板装在远程服务器上时
+    回调地址是从 Host 推出来的，只有换了 Host 才测得到那条分支。
     """
     url = BASE + path
     data = None
-    headers = {}
+    sent = dict(headers or {})
     if literally is not None:
         data = literally
-        headers["Content-Type"] = content_type or "application/x-www-form-urlencoded"
+        sent.setdefault("Content-Type", content_type or "application/x-www-form-urlencoded")
     elif body is not None:
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-        headers["Content-Type"] = "application/json; charset=utf-8"
+        sent.setdefault("Content-Type", "application/json; charset=utf-8")
     if token:
-        headers["Authorization"] = "Bearer " + token
+        sent["Authorization"] = "Bearer " + token
 
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    req = urllib.request.Request(url, data=data, headers=sent, method=method)
     try:
         resp = urllib.request.urlopen(req, timeout=30)
         payload = resp.read().decode("utf-8")
@@ -365,12 +369,33 @@ check(u"发起授权这一步不会先建出账号",
       call("GET", "/api/accounts?platform=commandcode&keyword=" + urllib.parse.quote(u"待授权-" + RUN_ID),
            token=token)[1].get("total") == 0, None)
 
-# 面板跑在本机时 callback_is_loopback 为真，前端才允许开自动那条路。
-# 脚本默认就是对着 127.0.0.1 跑的，所以这里应当是 true；这个字段判错的
-# 后果是远程面板会去开一个注定显示 Invalid Request 的标签页。
+# 面板跑在本机时 callback_is_loopback 为真，前端才走「自动跳回来」那条路。
+# 脚本默认就是对着 127.0.0.1 跑的，所以这里应当是 true。
 check(u"本机回调会告诉前端可以走自动模式",
       body.get("callback_is_loopback") is True,
       (body.get("callback_is_loopback"), body.get("callback_url")))
+
+# 换一个远程 Host，同样一次发起就该翻成「抄回来」：回调地址是远程域名时
+# studio 不认，所以交给它的必须是**另一个**（没人监听的 localhost）地址，
+# 并且不能带 mode=redirect——带了就成了顶层表单提交，浏览器会停在一个打不开
+# 的页面上，而不是退回到那页「Copy your API key」。
+status, remote = call("POST", "/api/accounts/oauth/commandcode",
+                      {"name": uniq(u"远程面板"), "group_ids": [cc_group],
+                       "concurrency": 1, "priority": 50}, token=token,
+                      headers={"Host": "panel.example.com",
+                               "X-Forwarded-Proto": "https"})
+check(u"远程面板会被告知回调不是本机",
+      status == 200 and remote.get("callback_is_loopback") is False, (status, remote))
+remote_query = dict(urllib.parse.parse_qsl(
+    urllib.parse.urlparse(remote.get("auth_url", "")).query))
+remote_cb = remote_query.get("callback", "")
+check(u"远程时交给 studio 的回调是 localhost（它只认这个）",
+      remote_cb.startswith("http://127.0.0.1:") and remote_cb.endswith("/callback"),
+      remote_cb)
+check(u"远程时不能再用面板自己的域名当回调",
+      "panel.example.com" not in remote_cb, remote_cb)
+check(u"远程时不带 mode=redirect（带了就没有复制那一页）",
+      "mode" not in remote_query, remote_query)
 
 # 回调必须在鉴权之外：浏览器是跳过来的，带不了 Authorization 头。
 # 带一个不存在的 state 时应当被拒，而不是建出账号。

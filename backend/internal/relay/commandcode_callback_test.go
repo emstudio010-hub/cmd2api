@@ -87,7 +87,7 @@ func TestParseCommandCodeCallbackAcceptsRealShapes(t *testing.T) {
 func TestParseCommandCodeCallbackRejectsWrongThing(t *testing.T) {
 	// 授权页地址：query 里有 callback 和 state，看着很像回调地址，
 	// 但它没有 apiKey——用户会以为是我们这边坏了。
-	authorize := CommandCodeAuthURL("http://127.0.0.1:8080/api/accounts/oauth/commandcode/callback", "s")
+	authorize := CommandCodeAuthURL("http://127.0.0.1:8080/api/accounts/oauth/commandcode/callback", "s", true)
 
 	cases := []struct {
 		name string

@@ -15,7 +15,7 @@ import (
 // CLI 的实际拼法写死断言。
 func TestCommandCodeAuthURL(t *testing.T) {
 	callback := "https://panel.example.com/api/accounts/oauth/commandcode/callback"
-	raw := CommandCodeAuthURL(callback, "state-token")
+	raw := CommandCodeAuthURL(callback, "state-token", true)
 
 	parsed, err := url.Parse(raw)
 	if err != nil {
@@ -35,10 +35,27 @@ func TestCommandCodeAuthURL(t *testing.T) {
 	if got := q.Get("state"); got != "state-token" {
 		t.Errorf("state = %q", got)
 	}
-	// 少了 mode=redirect，studio 会走 POST JSON 那条老路径，
-	// 结果就是浏览器停在授权页上不回来。
+	// 少了 mode=redirect，studio 会走 fetch 那条路；回调地址真有人接时，
+	// 那条路要么被 CORS 挡下、要么得额外配响应头，都不如顶层表单提交直接。
 	if got := q.Get("mode"); got != "redirect" {
 		t.Errorf("mode = %q，期望 redirect", got)
+	}
+}
+
+// TestCommandCodeAuthURLOmitsRedirectMode 钉住「抄回来」那条路的形状。
+//
+// 不带 mode 时 studio 改用 fetch 发 JSON，发不出去就退回到自己那页
+// 「Copy your API key」。面板在远程时必须走这条：少了这个分支，回调地址
+// 只能是远程域名，studio 会直接判不通过，用户连授权界面都见不到。
+func TestCommandCodeAuthURLOmitsRedirectMode(t *testing.T) {
+	raw := CommandCodeAuthURL("http://127.0.0.1:47821/callback", "s", false)
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("生成的地址解析不了: %v", err)
+	}
+	if _, ok := parsed.Query()["mode"]; ok {
+		t.Fatalf("不该带 mode 参数，实际 %s", raw)
 	}
 }
 
@@ -47,7 +64,7 @@ func TestCommandCodeAuthURL(t *testing.T) {
 // 不编码的话地址里的 & 会把参数切断，studio 收到的是一个残缺的 callback。
 func TestCommandCodeAuthURLEscapesCallback(t *testing.T) {
 	callback := "http://127.0.0.1:8080/api/accounts/oauth/commandcode/callback?a=1&b=2"
-	raw := CommandCodeAuthURL(callback, "s")
+	raw := CommandCodeAuthURL(callback, "s", true)
 
 	// 整串里只应出现一个未编码的 "&b=2" 之外的 &，即参数分隔符本身。
 	if strings.Count(raw, "callback=") != 1 {

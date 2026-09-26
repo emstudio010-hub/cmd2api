@@ -282,6 +282,16 @@ Command Code 的授权流程（`/studio/auth/cli`，从 CLI 包里读出来的�
 auth.json 那种带边界情况的解析没有第二份。两边不一致的风险落在「逗号切分」这一条
 规则上，够简单，也够显眼。
 
+**为什么兜底模型表是整张照搬，而不是手挑一份。**
+`GET /provider/v1/models` 是主路径，拉不到时才用 `hardcodedModels` 兜底。这张表
+上一版是手挑的 26 条，一个 CLI 版本就被甩下了（Opus 5.5、GPT-6 Luna/Sol、Grok 4.7
+全没跟上）。所以现在不手挑：`backend/scripts/refresh_models.py` 直接从本地装的
+`command-code` 包里把 CLI 自己那张模型目录抠出来，按上游顺序整张抄进 `client.go`，
+只去掉标了 `hidden` 的条目。探包体有两个坑，脚本里都注掉了：`hidden` 除了字面量
+还有 `get hidden(){...}` 这种 getter（促销结束自动隐藏），只认字面量会把免费模型
+当成正式模型；另外锚点 id 落在**条目自己**的花括号里，直接配对切出来只有一条模型，
+而脚本还会"成功"跑完不报错。这是数据不是协议形状，改它不影响 wire 兼容性。
+
 ---
 
 ## 免责声明

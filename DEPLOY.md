@@ -1,6 +1,21 @@
 # 部署到 Ubuntu
 
-面向 Ubuntu 22.04 / 24.04 的完整部署步骤。全程只需要 Docker，不需要在宿主机装 Go、Node 或 Postgres。
+面向 Ubuntu 22.04 / 24.04 的部署步骤。
+
+有两条路，按你的情况选一条：
+
+| 方式 | 适合 | 需要什么 |
+|------|------|----------|
+| **[A. Docker](#a-docker-部署)** | 想省事、环境干净、将来好升级 | 只要 Docker |
+| **[B. 直接跑二进制](#b-直接跑二进制systemd)** | 宿主机已有 PostgreSQL，或不想装 Docker | 一个 Linux 二进制 + systemd |
+
+两条路用的是同一份配置项，区别只在谁来管进程。
+
+---
+
+# A. Docker 部署
+
+全程只需要 Docker，不需要在宿主机装 Go、Node 或 Postgres。
 
 ---
 
@@ -278,3 +293,94 @@ CC_UPSTREAM_PROXY=http://host.docker.internal:7890
 
 **账号被自动禁用了**
 连续探活失败达到阈值（默认 5 次）。在账号列表能看到最后一次的错误原因。修好之后点「测试连接」，成功会自动恢复启用。
+
+---
+
+# B. 直接跑二进制（systemd）
+
+不用 Docker，把编译好的二进制交给 systemd 管。适合宿主机已经跑着 PostgreSQL、
+或者你希望少一层容器。
+
+## B1. 准备
+
+需要：Linux x86_64、systemd、一个可用的 PostgreSQL。二进制是**静态链接**的，
+不依赖 glibc 之外的东西，也不需要在机器上装 Go 或 Node（前端产物已经打包在
+`web/` 里）。
+
+从 release 页面下载 `cmd2api-vX.Y.Z-linux-amd64.tar.gz` 并解压：
+
+```bash
+tar xzf cmd2api-vX.Y.Z-linux-amd64.tar.gz
+cd cmd2api-vX.Y.Z-linux-amd64
+```
+
+## B2. 安装
+
+```bash
+sudo ./install-binary.sh
+```
+
+脚本会做这些事（可重复执行，不会覆盖已有配置）：
+
+1. 建一个不可登录的系统用户 `cmd2api`
+2. 把二进制和前端产物装到 `/opt/cmd2api`
+3. 生成 `/etc/cmd2api/env`，并**随机生成** `DB_PASSWORD` / `JWT_SECRET` /
+   `ENCRYPTION_KEY` / 管理员初始密码
+4. 装上并启动 systemd 单元
+
+它会打印出随机生成的数据库口令和管理员密码，**记下来**。
+
+## B3. 建数据库
+
+脚本生成的口令是随机的，但数据库里还没有对应的用户，需要建一次：
+
+```bash
+DB_PW='把脚本打印出来的口令粘这里'
+sudo -u postgres psql -c "CREATE USER cmd2api WITH PASSWORD '$DB_PW';"
+sudo -u postgres psql -c "CREATE DATABASE cmd2api OWNER cmd2api;"
+sudo systemctl restart cmd2api
+```
+
+表结构由后端启动时自动迁移，不需要手工执行 SQL。
+
+## B4. 确认
+
+```bash
+curl -s http://127.0.0.1:8080/health     # {"status":"ok"}
+journalctl -u cmd2api -f                 # 看日志
+```
+
+后面的「首次登录」「nginx + HTTPS」「接入客户端」与 Docker 方式完全一样，
+见第 5、6、7 节。
+
+## B5. 日常运维
+
+```bash
+sudo systemctl restart cmd2api        # 改完配置重启
+sudo journalctl -u cmd2api -n 100     # 看最近日志
+sudo systemctl status cmd2api         # 状态
+```
+
+升级：解压新版本的包，再跑一次 `sudo ./install-binary.sh` 即可——
+它只替换二进制和 `web/`，`/etc/cmd2api/env` 保持不动。
+
+备份（和 Docker 方式一样，数据库是唯一要备份的东西）：
+
+```bash
+pg_dump -U cmd2api cmd2api | gzip > cmd2api-$(date +%F).sql.gz
+```
+
+> 同样别忘了 `/etc/cmd2api/env` 里的 `ENCRYPTION_KEY`。没有它，
+> 备份里的账号凭证解不出来。
+
+## B6. 配置项在哪
+
+全部在 `/etc/cmd2api/env`（权限 `0640 root:cmd2api`，里面有凭证）。
+每一项的说明见仓库里的 `.env.example`。改完执行
+`sudo systemctl restart cmd2api`。
+
+两个最容易踩的：
+
+- `CC_UPSTREAM_PROXY` —— 服务器访问境外上游需要走代理时填，例如
+  `http://127.0.0.1:7890`。留空表示直连。
+- `ENCRYPTION_KEY` —— **不能丢也不能换**，见上面的说明。

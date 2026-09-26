@@ -1,0 +1,67 @@
+# cmd2api 的 systemd 单元（不使用 Docker、直接跑二进制时用）。
+#
+# 安装：见 deploy/install-binary.sh，或手动：
+#   sudo cp cmd2api.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now cmd2api
+
+[Unit]
+Description=cmd2api — Command Code / OpenCode 账号池网关
+Documentation=https://github.com/emstudio010-hub/cmd2api
+After=network-online.target
+Wants=network-online.target
+
+# 这里刻意不写 Requires=postgresql.service：数据库很可能在另一台机器上，
+# 硬依赖本机 postgres 会让单元在远程数据库的场景下起不来。
+# 连不上库时进程自己会退避重试，不需要 systemd 代劳。
+
+[Service]
+Type=simple
+User=cmd2api
+Group=cmd2api
+WorkingDirectory=/opt/cmd2api
+
+# 所有配置都在这个文件里（DB_PASSWORD / JWT_SECRET / ENCRYPTION_KEY 等）。
+# 权限应当是 0640 root:cmd2api —— 里面有凭证。
+EnvironmentFile=/etc/cmd2api/env
+
+ExecStart=/opt/cmd2api/cmd2api
+
+Restart=always
+RestartSec=3
+# 反复崩溃时不要无限重启刷日志。5 分钟内超过 10 次就停手，
+# 让运维能在 journalctl 里看到完整的失败现场。
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+# 优雅退出：SIGTERM 后给它时间把在途请求收尾（代码里留了 20 秒）。
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cmd2api
+
+# ---- 加固 ----
+# 这个服务只需要网络和一个静态二进制，其余权限一律收掉。
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+# ProtectSystem=strict 会把整个文件系统挂成只读，所以运行期需要写的地方
+# 要单独放出来。本项目不写文件（日志走 stdout 交给 journald），
+# 只有 /opt/cmd2api 下读前端产物、以及可能的临时目录。
+ReadOnlyPaths=/opt/cmd2api
+ReadWritePaths=/opt/cmd2api/tmp
+
+[Install]
+WantedBy=multi-user.target

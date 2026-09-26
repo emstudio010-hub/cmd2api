@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,7 +36,25 @@ const (
 // 刻意写死而不是跟着 npm 上跑：真机发出去的永远是「形状 + 版本号自洽」的组合。
 // 如果版本号跟着 npm 涨、形状却没改，就变成「自称最新版、却说旧方言」——
 // 这比版本号略旧更容易被行为分析挑出来。升级前先读包对齐，再改这个常量。
-const protocolVersion = "1.53.1"
+//
+// 1.66.0 已逐项比对过（command-code@1.66.0 的 dist/cli.mjs），形状没有变化：
+//   - 头：Content-Type / User-Agent "cli" / x-command-code-version /
+//     x-cli-environment / x-project-slug / x-taste-learning / x-session-id /
+//     Authorization: Bearer，与 buildCommandAuthHeaders 一致。
+//     1.66.0 新增的 x-oauth-token、x-oauth-provider、x-oss-primary-provider、
+//     x-cmd-zdr、x-cmd-provider-deepseek-internal 都是条件发送的
+//     （OAuth 登录、BYOK、ZDR、内部 provider），走 API key 这条路径不带。
+//   - 会话 ID：sess_ + UUID 去横线后的前 16 位（generateSessionId）。
+//   - 指纹体：{thumbmark, components}，盐 "command-code:device-fingerprint:v1"，
+//     collectorVersion 1，runtime "cli"。
+//   - 生命周期事件：{eventType:"cli_session_exists", metadata:{sessionId,
+//     cliVersion, mode, os}}。
+//   - 路径：/alpha/generate、/alpha/fingerprint/record、/alpha/lifecycle-events、
+//     /alpha/billing/credits 全部未变。
+//
+// 唯一改掉的是会话 ID 的形状：原来 sessionFor 直接发一个带横线的 UUID，
+// 而 CLI 发的是 sess_ 前缀那种。这个比版本号显眼得多。
+const protocolVersion = "1.66.0"
 
 // hardcodedModels 是拿不到动态模型列表时的兜底。
 // 顺序与 commandcode-proxy 保持一致，方便对账。
@@ -175,9 +194,22 @@ func (c *Client) sessionFor(apiKey string) string {
 	if st.sessionID != "" && time.Now().Before(st.sessionExpiresAt) {
 		return st.sessionID
 	}
-	st.sessionID = randomUUID()
+	st.sessionID = newSessionID()
 	st.sessionExpiresAt = time.Now().Add(sessionDuration + randomJitter(sessionJitter))
 	return st.sessionID
+}
+
+// newSessionID 按 CLI 的格式造一个会话 ID。
+//
+// CLI 是 `sess_` + UUID 去掉横线后的前 16 位十六进制（generateSessionId）。
+// 这里必须照着来：会话 ID 出现在每一个请求的 x-session-id 头上，形状不对
+// 是一条一眼就能看出来的差异——比版本号旧明显得多。
+func newSessionID() string {
+	compact := strings.ReplaceAll(randomUUID(), "-", "")
+	if len(compact) > 16 {
+		compact = compact[:16]
+	}
+	return "sess_" + compact
 }
 
 // resolveSessionID 决定本次请求用哪个会话 ID。
@@ -227,7 +259,13 @@ func (c *Client) EnsureInitialized(ctx context.Context, apiKey string) {
 	fp := st.fingerprint
 	c.mu.Unlock()
 
-	headers := c.baseHeaders(apiKey)
+	// 预请求带的会话 ID 必须和生成请求用同一个。
+	//
+	// CLI 全程只有一个会话 ID（startSession 生成一次，getSessionId 到处复用），
+	// 生命周期事件里报一个、请求头上又是另一个，等于凭空多出一个会话——
+	// 这正是「机器在冒充 CLI」才有的痕迹。
+	sessionID := c.sessionFor(apiKey)
+	headers := c.baseHeaders(apiKey, sessionID)
 
 	fpBody, err := json.Marshal(fp)
 	if err != nil {
@@ -238,7 +276,7 @@ func (c *Client) EnsureInitialized(ctx context.Context, apiKey string) {
 	lifecycle := map[string]any{
 		"eventType": "cli_session_exists",
 		"metadata": map[string]any{
-			"sessionId":  "sess_" + randomHex(8),
+			"sessionId":  sessionID,
 			"cliVersion": protocolVersion,
 			"mode":       "interactive",
 			"os":         fp.Components.Platform + "-" + fp.Components.Arch,
@@ -362,6 +400,9 @@ func (c *Client) fetchModels(ctx context.Context, apiKey string) []Model {
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("x-cli-environment", "production")
 	req.Header.Set("x-command-code-version", protocolVersion)
+	// provider 端点也要带会话 ID：CLI 从 1.56.1 起给「需要它的 BYOK 主机」补上了
+	// 这个头，而 /provider/ 正是这类端点。
+	req.Header.Set("x-session-id", c.sessionFor(apiKey))
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -406,10 +447,18 @@ func (c *Client) fetchModels(ctx context.Context, apiKey string) []Model {
 }
 
 // baseHeaders 构造预请求用的公共头。
-func (c *Client) baseHeaders(apiKey string) http.Header {
+// baseHeaders 是辅助请求（指纹上报）的公共头。
+//
+// 不带 x-session-id 的话这些请求看起来就不像同一个 CLI 发出来的，所以由调用方
+// 把会话 ID 传进来，和生成请求保持一致。
+func (c *Client) baseHeaders(apiKey, sessionID string) http.Header {
 	h := http.Header{}
 	h.Set("Content-Type", "application/json")
+	h.Set("User-Agent", "cli")
 	h.Set("x-cli-environment", "production")
+	h.Set("x-project-slug", slugifyProjectPath(c.device.ProjectDir))
+	h.Set("x-taste-learning", "false")
+	h.Set("x-session-id", sessionID)
 	h.Set("Authorization", "Bearer "+apiKey)
 	h.Set("x-command-code-version", protocolVersion)
 	return h

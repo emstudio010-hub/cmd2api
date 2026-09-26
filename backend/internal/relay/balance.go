@@ -215,7 +215,7 @@ func (c *Client) getJSON(ctx context.Context, apiKey, path string, out any) erro
 	if err != nil {
 		return fmt.Errorf("构造请求失败: %w", err)
 	}
-	req.Header = c.baseHeaders(apiKey)
+	req.Header = c.baseHeaders(apiKey, c.sessionFor(apiKey))
 
 	resp, err := c.http.Do(req)
 	if err != nil {

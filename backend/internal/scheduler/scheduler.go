@@ -145,36 +145,55 @@ func (s *Scheduler) Acquire(ctx context.Context, groupID int64, excludeIDs ...in
 	}
 
 	var lastErr error
-	for _, acc := range accounts {
-		if !s.limiter.tryAcquire(acc.ID, acc.Concurrency) {
-			continue // 该账号并发已满，试下一个
-		}
 
-		creds, err := s.credentials(acc)
-		if err != nil {
-			// 解密失败是配置/数据问题，不是这个账号「忙」。放开名额、
-			// 记一条日志再试下一个，避免一条坏数据把整个分组拖死。
-			s.limiter.release(acc.ID)
-			lastErr = fmt.Errorf("账号 %d(%s) 的凭证无法解密: %w", acc.ID, acc.Name, err)
-			s.logger.Error("凭证解密失败", "account_id", acc.ID, "account_name", acc.Name, "err", err)
-			continue
-		}
+	// 分成两拨试：额度窗口还有余量的优先，已经打满的留作兜底。
+	//
+	// 兜底那一拨不能省。全部账号都打满时，直接失败还不如把请求发出去——
+	// 上游的拒绝是个准确的答复，而我们的快照最多十分钟前，可能已经过时。
+	// 所以这里是「优先用能用的」，不是「宁可失败也不用剩下的」。
+	//
+	// 注意这只是在候选集**内部**排序。候选集本身按优先级取前 candidateLimit 个，
+	// 所以账号池大到一定程度时，排在很后面的账号本来就不会进这个循环——那是
+	// 原有边界，这里没有改变它。
+	preferred, exhausted := splitByWindow(accounts, now)
 
-		accountID := acc.ID
-		lease := &Lease{
-			Account:     acc,
-			Credentials: creds,
-			Platform:    acc.Platform,
-			Release:     func() { s.limiter.release(accountID) },
-		}
-		if lease.Platform == domain.PlatformOpenCode {
-			lease.AccountMode = stringFromExtra(acc.Extra, "account_mode")
-			lease.BaseURL = stringFromExtra(acc.Extra, "base_url")
-			if lease.BaseURL == "" {
-				lease.BaseURL = domain.DefaultOpenCodeBaseURL(lease.AccountMode)
+	if len(exhausted) > 0 && len(preferred) > 0 {
+		s.logger.Debug("优先使用额度窗口还有余量的账号",
+			"group_id", groupID, "可用", len(preferred), "已打满", len(exhausted))
+	}
+
+	for _, bucket := range [][]*ent.Account{preferred, exhausted} {
+		for _, acc := range bucket {
+			if !s.limiter.tryAcquire(acc.ID, acc.Concurrency) {
+				continue // 该账号并发已满，试下一个
 			}
+
+			creds, err := s.credentials(acc)
+			if err != nil {
+				// 解密失败是配置/数据问题，不是这个账号「忙」。放开名额、
+				// 记一条日志再试下一个，避免一条坏数据把整个分组拖死。
+				s.limiter.release(acc.ID)
+				lastErr = fmt.Errorf("账号 %d(%s) 的凭证无法解密: %w", acc.ID, acc.Name, err)
+				s.logger.Error("凭证解密失败", "account_id", acc.ID, "account_name", acc.Name, "err", err)
+				continue
+			}
+
+			accountID := acc.ID
+			lease := &Lease{
+				Account:     acc,
+				Credentials: creds,
+				Platform:    acc.Platform,
+				Release:     func() { s.limiter.release(accountID) },
+			}
+			if lease.Platform == domain.PlatformOpenCode {
+				lease.AccountMode = stringFromExtra(acc.Extra, "account_mode")
+				lease.BaseURL = stringFromExtra(acc.Extra, "base_url")
+				if lease.BaseURL == "" {
+					lease.BaseURL = domain.DefaultOpenCodeBaseURL(lease.AccountMode)
+				}
+			}
+			return lease, nil
 		}
-		return lease, nil
 	}
 
 	if lastErr != nil {

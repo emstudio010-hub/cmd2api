@@ -229,11 +229,20 @@ function close(): void {
  *     打不开的地址粘进来。这时回调从没被访问过，state 还挂着，所以后端能
  *     用粘回来的 state 认出是哪次握手、沿用上面填的那些字段。
  */
-type OAuthPhase = 'idle' | 'waiting'
+type OAuthPhase = 'idle' | 'waiting' | 'blocked'
 
 const oauthPhase = ref<OAuthPhase>('idle')
 const oauthState = ref('')
 const oauthCallbackUrl = ref('')
+/**
+ * 回调地址是不是指向本机。
+ *
+ * studio 只接受 localhost 的回调地址（它自己的授权页上写着 "Only localhost
+ * URLs are allowed for security"，判不过就整页换成 Invalid Request）。面板装在
+ * 远程服务器上时回调必然是远程域名，于是授权页根本进不去——不是我们收不到
+ * 结果，是走不到那一步。所以这里要分清，才好给对引导。
+ */
+const oauthCallbackIsLoopback = ref(true)
 const oauthError = ref('')
 /** 手动粘贴的内容：一条回调地址，或者一把裸密钥。 */
 const oauthPaste = ref('')
@@ -300,7 +309,19 @@ async function startOAuth(): Promise<void> {
     const result = await accountsApi.startOAuth(oauthFields())
     oauthState.value = result.state
     oauthCallbackUrl.value = result.callback_url
+    oauthCallbackIsLoopback.value = result.callback_is_loopback !== false
     oauthPaste.value = ''
+
+    if (!oauthCallbackIsLoopback.value) {
+      // 这一趟注定走不通，而且不是「可能失败」而是「一定失败」：studio 的
+      // 授权页会先把回调地址判一遍，不是 localhost 就整页换成 Invalid
+      // Request，用户连选账号的那个界面都见不到。
+      //
+      // 那就别开那个标签页了——开出去只会让人对着一个英文报错页发愣，
+      // 还得回来问「这是哪一步错了」。把原因和两条能走的路直接摆在眼前。
+      oauthPhase.value = 'blocked'
+      return
+    }
 
     const opened = window.open(result.auth_url, '_blank', 'noopener')
     if (!opened) {
@@ -557,6 +578,50 @@ async function submit(): Promise<void> {
               </span>
             </div>
 
+            <!--
+              回调地址不指向本机。这不是「可能失败」，是「一定失败」：studio
+              判完回调地址就把整页换掉了，用户连授权界面都见不到。所以不开
+              那个标签页，直接把原因和两条能走的路说清楚。
+            -->
+            <div
+              v-else-if="oauthPhase === 'blocked'"
+              class="mt-2 space-y-2 rounded-md border border-line bg-raised px-2.5 py-2.5"
+            >
+              <div class="flex items-start gap-2">
+                <Icon name="alertCircle" :size="13" class="mt-0.5 shrink-0 text-danger" />
+                <div class="min-w-0 flex-1">
+                  <p class="text-2xs font-medium text-fg">
+                    用当前这个地址打不开浏览器登录
+                  </p>
+                  <p class="mt-0.5 text-2xs leading-relaxed text-subtle">
+                    Command Code 的授权页只接受
+                    <code class="font-mono">localhost</code> 的回调地址。面板不在你
+                    本机上时，回调地址只能是这个域名，它会直接把整页换成
+                    「Invalid Request」，授权界面根本进不去。两条路可以走：
+                  </p>
+                </div>
+              </div>
+
+              <ol class="ml-4 list-decimal space-y-1.5 text-2xs leading-relaxed text-subtle">
+                <li>
+                  <strong class="font-medium text-muted">把面板映射到本机再试</strong>
+                  ：在你自己电脑上开一条 SSH 隧道，然后用
+                  <code class="font-mono">http://127.0.0.1:8080</code> 打开面板。
+                  那时回调地址就是 localhost，整条链路会自己走通
+                  <span class="block font-mono text-subtle">
+                    ssh -L 8080:127.0.0.1:8080 用户名@服务器地址
+                  </span>
+                </li>
+                <li>
+                  <strong class="font-medium text-muted">直接粘一把密钥</strong>：去
+                  Command Code 后台的 API Keys 页面复制一把 key，填在上面的「密钥」
+                  框里——两条路拿到的是同一种密钥，效果一样。
+                </li>
+              </ol>
+
+              <Button variant="ghost" size="sm" @click="cancelOAuth">知道了</Button>
+            </div>
+
             <!-- 等另一个标签页里那次授权的结果 -->
             <div
               v-else
@@ -584,8 +649,7 @@ async function submit(): Promise<void> {
               </div>
 
               <!--
-                手动那条路。默认折叠着：它是给「浏览器跳不回这台机器」的
-                情形用的，正常情况下用不上，摊开只会让人以为要填。
+                手动那条路。默认折叠着：正常情况下用不上，摊开只会让人以为要填。
               -->
               <details class="group">
                 <summary
@@ -593,21 +657,22 @@ async function submit(): Promise<void> {
                 >
                   <span class="inline-flex items-center gap-1">
                     <Icon name="chevronRight" :size="12" class="group-open:rotate-90" />
-                    浏览器打不开跳转后的页面？（在远程服务器上部署时常见）
+                    手里已经有一条回调地址，或者一把密钥？
                   </span>
                 </summary>
 
                 <div class="mt-2 space-y-2">
                   <p class="text-2xs leading-relaxed text-subtle">
-                    把浏览器地址栏里那条<strong class="font-medium text-muted">打不开</strong>的
-                    地址整条复制过来，粘在下面。密钥就在那条地址里，这样粘一次，
-                    刚才的登录就不算白做。
+                    整条回调地址和一把裸密钥都收。地址里带
+                    <code class="font-mono">apiKey</code> 的旧格式可以，只粘那串
+                    <code class="font-mono">user_</code> 密钥也可以；这里会先校验
+                    再建号，建不出来不会留下半个账号。
                   </p>
                   <Textarea
                     v-model="oauthPaste"
                     :rows="2"
                     :mono="true"
-                    placeholder="http://127.0.0.1:8080/api/accounts/oauth/commandcode/callback?apiKey=...&state=..."
+                    placeholder="https://…/callback?apiKey=...&state=... 或直接粘 user_..."
                   />
                   <div class="flex flex-wrap items-center gap-2">
                     <Button
@@ -617,9 +682,8 @@ async function submit(): Promise<void> {
                       :disabled="!oauthPaste.trim()"
                       @click="completeOAuthManually"
                     >
-                      用这段地址完成
+                      用这段内容完成
                     </Button>
-                    <span class="text-2xs text-subtle">也可以只粘那串密钥</span>
                   </div>
                 </div>
               </details>

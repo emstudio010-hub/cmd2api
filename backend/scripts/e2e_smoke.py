@@ -50,12 +50,20 @@ def uniq(base):
     return u"%s-%s" % (base, RUN_ID)
 
 
-def call(method, path, body=None, token=None, raw=False):
-    """发一个请求，返回 (status, parsed_body)。"""
+def call(method, path, body=None, token=None, raw=False, literally=None, content_type=None):
+    """发一个请求，返回 (status, parsed_body)。
+
+    body 走 JSON；literally 是原样发出的字节，配 content_type 用——
+    授权回调是 studio 用表单 POST 过来的，那条路必须按它真实的形状测，
+    用 JSON 发一遍测不到解析表单的那段代码。
+    """
     url = BASE + path
     data = None
     headers = {}
-    if body is not None:
+    if literally is not None:
+        data = literally
+        headers["Content-Type"] = content_type or "application/x-www-form-urlencoded"
+    elif body is not None:
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         headers["Content-Type"] = "application/json; charset=utf-8"
     if token:
@@ -94,11 +102,14 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def call_no_redirect(method, path, body=None, token=None):
+def call_no_redirect(method, path, body=None, token=None, literally=None, content_type=None):
     """发一个请求，不跟随重定向，返回 (status, headers)。"""
     data = None
     headers = {}
-    if body is not None:
+    if literally is not None:
+        data = literally
+        headers["Content-Type"] = content_type or "application/x-www-form-urlencoded"
+    elif body is not None:
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         headers["Content-Type"] = "application/json; charset=utf-8"
     if token:
@@ -348,16 +359,22 @@ check(u"授权地址指向 studio 的 CLI 入口",
       auth_url.startswith("https://commandcode.ai/studio/auth/cli?"), auth_url)
 check(u"授权地址带回跳与一次性 state",
       query.get("mode") == "redirect" and len(query.get("state", "")) >= 32
-      and query.get("callback", "").endswith("/api/accounts/oauth/commandcode/callback"),
+      and query.get("callback", "").endswith("/callback"),
       query)
 check(u"发起授权这一步不会先建出账号",
       call("GET", "/api/accounts?platform=commandcode&keyword=" + urllib.parse.quote(u"待授权-" + RUN_ID),
            token=token)[1].get("total") == 0, None)
 
+# 面板跑在本机时 callback_is_loopback 为真，前端才允许开自动那条路。
+# 脚本默认就是对着 127.0.0.1 跑的，所以这里应当是 true；这个字段判错的
+# 后果是远程面板会去开一个注定显示 Invalid Request 的标签页。
+check(u"本机回调会告诉前端可以走自动模式",
+      body.get("callback_is_loopback") is True,
+      (body.get("callback_is_loopback"), body.get("callback_url")))
+
 # 回调必须在鉴权之外：浏览器是跳过来的，带不了 Authorization 头。
 # 带一个不存在的 state 时应当被拒，而不是建出账号。
-status, headers = call_no_redirect(
-    "GET", "/api/accounts/oauth/commandcode/callback?state=" + u"x" * 43)
+status, headers = call_no_redirect("GET", "/callback?state=" + u"x" * 43)
 location = headers.get("Location", "")
 check(u"回调不要求登录（浏览器跳转带不了 token）", status != 401, status)
 check(u"回调拒绝未知 state",
@@ -365,6 +382,53 @@ check(u"回调拒绝未知 state",
 check(u"失败时回跳地址里带上原因",
       u"授权链接已失效" in urllib.parse.unquote(location), location)
 check(u"回跳地址里不带密钥", u"apiKey" not in location and u"user_" not in location, location)
+
+# studio 交回结果用的是**表单 POST**（mode=redirect 时它提交一个隐藏表单），
+# 不是带 query 的跳转。早先的实现按 query 读，所以自动那条路一次都没走通过——
+# 下面两段就是照它真实的形状打的：只验「state 被认出来并消费掉」，密钥能不能
+# 换成账号取决于上游，这里不管。
+def new_oauth_state(label):
+    s, b = call("POST", "/api/accounts/oauth/commandcode",
+                {"name": uniq(label), "group_ids": [cc_group],
+                 "concurrency": 1, "priority": 70}, token=token)
+    return b.get("state", "") if s == 200 else ""
+
+
+form_state = new_oauth_state(u"表单回调")
+check(u"能拿到一次新的握手 state", bool(form_state), form_state)
+_form = urllib.parse.urlencode({
+    "apiKey": "user_smoke_form_fake", "state": form_state,
+    "userId": "u-smoke", "userName": u"表单用户", "keyName": "cli",
+}).encode("utf-8")
+status, headers = call_no_redirect("POST", "/callback", literally=_form)
+location = headers.get("Location", "")
+check(u"表单 POST 的回调不要求登录", status != 401, status)
+check(u"表单 POST 的回调按 303 送回前端",
+      status == 303 and location.startswith("/accounts?"), (status, location))
+
+# 同一条表单再发一次。第一次已经把 state 收掉了，所以这次必然是「已失效」——
+# 这一条正着证明前一次真的被处理过，而不是被悄悄丢掉。
+status, headers = call_no_redirect("POST", "/callback", literally=_form)
+check(u"state 只认一次：重放同一条回调是已失效",
+      u"授权链接已失效" in urllib.parse.unquote(headers.get("Location", "")),
+      (status, headers.get("Location")))
+
+# 另一个分支：studio 的 fetch 那条路发的是 JSON。
+deny_state = new_oauth_state(u"表单拒绝")
+check(u"能拿到一次新的握手 state（拒绝分支）", bool(deny_state), deny_state)
+status, headers = call_no_redirect(
+    "POST", "/callback",
+    literally=json.dumps({"state": deny_state, "error": "access_denied"}).encode("utf-8"),
+    content_type="application/json")
+check(u"JSON 回调也能认（studio 另一条投递路径）",
+      u"已取消授权" in urllib.parse.unquote(headers.get("Location", "")),
+      (status, headers.get("Location")))
+
+# 有人把这个地址当普通页面打开时的兜底：什么都没带就直说这是回调地址，
+# 别回一句看不懂的「state 无效」。
+status, body = call("GET", "/callback")
+check(u"手动打开回调地址时给一句人话",
+      status == 400 and u"回调" in body.get("error", ""), (status, body))
 
 # ---- 授权结果的两种收尾方式 ----
 #
@@ -387,8 +451,7 @@ check(u"state 与本次授权地址里的那一个一致",
       (oauth_state, this_query.get("state")))
 callback_url = body.get("callback_url", "")
 check(u"回传的回调地址是绝对地址",
-      callback_url.startswith("http") and callback_url.endswith(
-          "/api/accounts/oauth/commandcode/callback"), callback_url)
+      callback_url.startswith("http") and callback_url.endswith("/callback"), callback_url)
 
 status, body = call("GET", "/api/accounts/oauth/commandcode/status?state=" + oauth_state,
                     token=token)

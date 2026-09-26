@@ -1,11 +1,15 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -40,8 +44,28 @@ const oauthOutcomeTTL = 2 * time.Minute
 // 上游十秒还不回话，就当这把密钥这次没验成，让他重试。
 const oauthWhoamiTimeout = 10 * time.Second
 
-// oauthCallbackPath 是 studio 把浏览器跳回来的后端路径。
-const oauthCallbackPath = "/api/accounts/oauth/commandcode/callback"
+// OAuthCallbackPath 是 studio 把授权结果交回来的路径。
+//
+// 为什么是这么短、还挂在站点根上的一条：studio 只接受 **localhost** 的回调
+// 地址（它自己的授权页上印着 "Only localhost URLs are allowed for security"），
+// 而官方 CLI 的本地服务监听的正是 `/callback`。这是唯一被验证过、studio 真会
+// 往上递东西的形状，照着抄最省事。
+//
+// 导出是给 router 用的：注册路由的人和拼地址的人必须是同一份常量，不然哪天
+// 改了一处，另一处就悄悄指向一个没人监听的路径。
+const OAuthCallbackPath = "/callback"
+
+// OAuthLegacyCallbackPath 是这套流程早先用的长路径。
+//
+// 留着只为不作废已经发出去、还没走完的授权链接——那些链接里的回调地址写死了
+// 长路径，删掉注册就等于让它们跳进 404。
+const OAuthLegacyCallbackPath = "/api/accounts/oauth/commandcode/callback"
+
+// oauthCallbackMaxBody 是回调请求体的上限。
+//
+// 正常一包就是几个短字段。给 64KB 是留足余量又不至于让一个不设防的端点
+// 被一大坨东西撑住内存——这条路径在鉴权之外，任何人都能打。
+const oauthCallbackMaxBody = 64 << 10
 
 // oauthAccountsPath 是授权收尾时把浏览器送回的前端路由。
 const oauthAccountsPath = "/accounts"
@@ -263,10 +287,36 @@ func (h *Handler) StartAccountOAuth(c *gin.Context) {
 		"auth_url":     relay.CommandCodeAuthURL(callbackURL, state),
 		"callback_url": callbackURL,
 		"expires_at":   expires.Format(time.RFC3339),
+		// 回调地址指不指向本机，决定了这趟授权有没有可能自动收尾：studio
+		// 只接受 localhost 的回调。前端拿它决定给哪一种引导，见 isLoopbackBase。
+		"callback_is_loopback": isLoopbackBase(callbackURL),
 		// state 回给前端，让它能轮询「好了没」。这不算额外泄漏：它就藏在
 		// auth_url 里，而 auth_url 本来就要交给这个页面去跳转。
 		"state": state,
 	})
+}
+
+// isLoopbackBase 判断一个地址是不是指向本机。
+//
+// 这个判断有实际后果：studio 只接受 localhost 的回调地址（它自己的授权页上
+// 印着 "Only localhost URLs are allowed for security"，判不过就整页换成
+// Invalid Request）。面板装在远程服务器上时，回调地址必然是那个远程域名，
+// 于是 studio 连授权界面都不给进——不是我们收不到结果，是根本走不到那一步。
+//
+// 所以前端需要知道这件事，才能把「自动收尾」和「手动粘贴」的引导给对。
+func isLoopbackBase(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }
 
 // createAccountFromKey 用一把刚拿到的上游密钥把账号建出来。
@@ -324,15 +374,84 @@ func (h *Handler) createAccountFromKey(
 	return acc, whoami, nil
 }
 
-// AccountOAuthCallback 接收 studio 跳回来的授权结果。
+// oauthCallbackPayload 是 studio 交回来的那一包东西。
 //
-// 这个端点**故意不挂 AdminAuth**：它是浏览器的顶层跳转，浏览器不会给这种
-// 跳转带 Authorization 头，挂上去等于每次授权都失败。身份完全靠一次性
+// 字段名不是我们定的：官方 CLI 的服务端按 apiKey / state / userId / userName /
+// keyName 去取，少一个就整包不收（它的 isCommandAuthCallbackRequest 就是这么判的）。
+// 我们真正要的只有 apiKey 和 state，但名字得跟着上游走。
+type oauthCallbackPayload struct {
+	APIKey           string `json:"apiKey" form:"apiKey"`
+	State            string `json:"state" form:"state"`
+	UserID           string `json:"userId" form:"userId"`
+	UserName         string `json:"userName" form:"userName"`
+	KeyName          string `json:"keyName" form:"keyName"`
+	Error            string `json:"error" form:"error"`
+	ErrorDescription string `json:"error_description" form:"error_description"`
+}
+
+// readOAuthCallbackPayload 从回调请求里取出 studio 交回来的东西。
+//
+// 只收 GET query 是不够的：现在的 studio 一律用 **POST** 递结果——
+// mode=redirect 时它造一张隐藏表单整体提交（application/x-www-form-urlencoded），
+// 不带 mode 时用 fetch 发 JSON。GET 那条留着只因为旧版是这样，成本是几行。
+//
+// 顺便一个好处：密钥从 query 挪进了请求体，连「URL 会不会被别处记下来」
+// 这个问题都不用再考虑了。
+func readOAuthCallbackPayload(c *gin.Context) oauthCallbackPayload {
+	var p oauthCallbackPayload
+	if c.Request.Method == http.MethodGet {
+		_ = c.ShouldBindQuery(&p)
+		return p
+	}
+
+	body, err := io.ReadAll(io.LimitReader(c.Request.Body, oauthCallbackMaxBody))
+	if err != nil {
+		return oauthCallbackPayload{}
+	}
+	body = bytes.TrimSpace(body)
+	if len(body) == 0 {
+		return oauthCallbackPayload{}
+	}
+
+	// 先看 Content-Type，再看内容本身像不像 JSON。
+	// 多这一道是因为发的形式取决于 studio 走哪条分支，不值得让整条链路
+	// 因为一个头标错了就失败。
+	if strings.Contains(c.GetHeader("Content-Type"), "application/json") || body[0] == '{' {
+		_ = json.Unmarshal(body, &p)
+		return p
+	}
+	values, err := url.ParseQuery(string(body))
+	if err != nil {
+		return oauthCallbackPayload{}
+	}
+	return oauthCallbackPayload{
+		APIKey:           strings.TrimSpace(values.Get("apiKey")),
+		State:            strings.TrimSpace(values.Get("state")),
+		UserID:           values.Get("userId"),
+		UserName:         values.Get("userName"),
+		KeyName:          values.Get("keyName"),
+		Error:            strings.TrimSpace(values.Get("error")),
+		ErrorDescription: strings.TrimSpace(values.Get("error_description")),
+	}
+}
+
+// AccountOAuthCallback 接收 studio 交回来的授权结果。
+//
+// 这个端点**故意不挂 AdminAuth**：它是浏览器发起的请求，mode=redirect 时更是
+// 一次顶层表单提交，浏览器不会给它带 Authorization 头。身份完全靠一次性
 // state 认——这也是上面那个 store 存在的理由。
 //
 // 它必须待在 AdminAuth 之外，所以注册在 api 组而不是 admin 组里。
 func (h *Handler) AccountOAuthCallback(c *gin.Context) {
-	state := c.Query("state")
+	payload := readOAuthCallbackPayload(c)
+	state := strings.TrimSpace(payload.State)
+	if state == "" && payload.APIKey == "" && payload.Error == "" {
+		// 用浏览器直接打开这个地址，或者不是 studio 发来的东西。说清楚这条
+		// 路径是干嘛的，比丢一句「参数错误」有用。
+		fail(c, http.StatusBadRequest,
+			"这是授权回调地址，正常流程里由授权页自动提交，不需要手动打开")
+		return
+	}
 	pending, ok := h.oauthStates.take(state)
 	if !ok {
 		// 这次握手已经被别处收掉了。最可能的场景：用户走了手动粘贴那条路
@@ -359,12 +478,12 @@ func (h *Handler) AccountOAuthCallback(c *gin.Context) {
 	}
 
 	// 用户在站上点了拒绝时，studio 会带 error 回来。
-	if code := c.Query("error"); code != "" {
+	if code := strings.TrimSpace(payload.Error); code != "" {
 		if code == "access_denied" {
 			h.oauthFail(c, state, "已取消授权")
 			return
 		}
-		desc := strings.TrimSpace(c.Query("error_description"))
+		desc := strings.TrimSpace(payload.ErrorDescription)
 		if desc == "" {
 			desc = code
 		}
@@ -373,7 +492,7 @@ func (h *Handler) AccountOAuthCallback(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	acc, whoami, err := h.createAccountFromKey(ctx, pending.Fields, c.Query("apiKey"), pending.AdminID)
+	acc, whoami, err := h.createAccountFromKey(ctx, pending.Fields, payload.APIKey, pending.AdminID)
 	if err != nil {
 		h.oauthFail(c, state, err.Error())
 		return
@@ -551,7 +670,7 @@ func (h *Handler) oauthCallbackURL(c *gin.Context) string {
 		}
 		base = scheme + "://" + host
 	}
-	return base + oauthCallbackPath
+	return base + OAuthCallbackPath
 }
 
 // isSaneHost 粗筛 Host 头，挡掉空值和带控制字符的构造。

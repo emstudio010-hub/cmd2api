@@ -248,6 +248,14 @@ export interface StartAccountOAuthResult {
   auth_url: string
   /** 后端算出来的回调地址。显示给用户看，出问题时一眼能看出拼错没有。 */
   callback_url: string
+  /**
+   * 回调地址是不是指向本机。
+   *
+   * 这个值决定这趟授权有没有可能自动收尾：studio 只接受 localhost 的回调，
+   * 面板装在远程服务器上时回调必然是远程域名，studio 连授权界面都不给进。
+   * false 的时候不能再引导用户去点「自动收尾」，得改引导到手动粘贴。
+   */
+  callback_is_loopback: boolean
   /** 这次握手的失效时间。 */
   expires_at: string
   /** 这次握手的标识。拿来轮询「授权好了没」，也用于手动收尾时对上表单字段。 */

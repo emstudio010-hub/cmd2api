@@ -43,19 +43,31 @@ func NewRouter(opts Options) *gin.Engine {
 
 	h := opts.Handler
 
+	// 浏览器授权的回调必须在鉴权之外：studio 要么让浏览器整体提交一张表单，
+	// 要么用 fetch 发一包 JSON，两种都不会带 Authorization 头。身份由发起时
+	// 生成的一次性 state 认，取走即作废。
+	//
+	// 路径挂在站点根上的 /callback：studio 只接受 localhost 的回调地址，而
+	// 官方 CLI 的本地服务监听的就是这个路径——照着唯一被验证过的形状来。
+	// POST 是主路径（GET 只为兼容旧版链接），两条都注册。
+	//
+	// 密钥走请求体或 query，两者都不进访问日志：accessLog 只记 URL.Path。
+	r.GET(handler.OAuthCallbackPath, h.AccountOAuthCallback)
+	r.POST(handler.OAuthCallbackPath, h.AccountOAuthCallback)
+
+	// 早先那套长路径的回调。已经发出去的授权链接里写死了它，删掉注册就会让
+	// 那些链接跳进 404，所以留着，行为与上面完全一致。
+	//
+	// 注意这两条挂在 r 上而不是 api 组里：常量本身就是含 /api 的完整路径，
+	// 挂到 api 组上会拼成 /api/api/...，那就跟没注册一样。
+	r.GET(handler.OAuthLegacyCallbackPath, h.AccountOAuthCallback)
+	r.POST(handler.OAuthLegacyCallbackPath, h.AccountOAuthCallback)
+
 	// ---- 管理后台 ----
 	api := r.Group("/api")
 	{
 		// 登录本身不能要求已登录。
 		api.POST("/auth/login", h.Login)
-
-		// 浏览器授权的回调也必须在鉴权之外。它是 studio 让浏览器做的顶层
-		// 跳转，浏览器不会给这种跳转带 Authorization 头；身份由发起时生成
-		// 的一次性 state 认，取走即作废。
-		//
-		// 这条路径的 query 里会带一把明文 apiKey，所以它绝不能进访问日志：
-		// accessLog 只记 URL.Path、不记 RawQuery，这里依赖那个前提。
-		api.GET("/accounts/oauth/commandcode/callback", h.AccountOAuthCallback)
 
 		admin := api.Group("")
 		admin.Use(middleware.AdminAuth(opts.Issuer))

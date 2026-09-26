@@ -35,26 +35,25 @@ func newTestRouter(t *testing.T) *gin.Engine {
 func TestNewRouterRegistersOAuthRoutes(t *testing.T) {
 	r := newTestRouter(t)
 
-	want := map[string]string{
-		"/api/accounts/oauth/commandcode":          http.MethodPost,
-		"/api/accounts/oauth/commandcode/callback": http.MethodGet,
-		"/api/accounts/oauth/commandcode/status":   http.MethodGet,
-		"/api/accounts/oauth/commandcode/complete": http.MethodPost,
-		"/api/auth/profile":                        http.MethodPut,
+	want := []struct{ method, path string }{
+		{http.MethodPost, "/api/accounts/oauth/commandcode"},
+		{http.MethodGet, "/api/accounts/oauth/commandcode/status"},
+		{http.MethodPost, "/api/accounts/oauth/commandcode/complete"},
+		{http.MethodPut, "/api/auth/profile"},
+		// 回调要收 POST——studio 现在就是用 POST 递结果的；GET 只为兼容
+		// 早先发出去的旧链接。两条路径、两种方法，四个组合都得在。
+		{http.MethodGet, handler.OAuthCallbackPath},
+		{http.MethodPost, handler.OAuthCallbackPath},
+		{http.MethodGet, handler.OAuthLegacyCallbackPath},
+		{http.MethodPost, handler.OAuthLegacyCallbackPath},
 	}
-	got := make(map[string]string)
+	registered := make(map[string]bool)
 	for _, route := range r.Routes() {
-		if _, ok := want[route.Path]; ok {
-			got[route.Path] = route.Method
-		}
+		registered[route.Method+" "+route.Path] = true
 	}
-	for path, method := range want {
-		switch got[path] {
-		case "":
-			t.Errorf("缺少路由 %s %s", method, path)
-		case method:
-		default:
-			t.Errorf("%s 的方法应当是 %s，实际 %s", path, method, got[path])
+	for _, w := range want {
+		if !registered[w.method+" "+w.path] {
+			t.Errorf("缺少路由 %s %s", w.method, w.path)
 		}
 	}
 }
@@ -112,27 +111,68 @@ func TestUpdateEmailRequiresAuth(t *testing.T) {
 func TestOAuthCallbackIsNotBehindAdminAuth(t *testing.T) {
 	r := newTestRouter(t)
 
-	req := httptest.NewRequest(http.MethodGet,
-		"/api/accounts/oauth/commandcode/callback?state=whatever&apiKey=user_secret", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	cases := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+		ctype  string
+	}{
+		{
+			name:   "studio 现在的方式：表单 POST 到 /callback",
+			method: http.MethodPost,
+			path:   handler.OAuthCallbackPath,
+			body:   "apiKey=user_secret&state=whatever&userId=u1&userName=a&keyName=k",
+			ctype:  "application/x-www-form-urlencoded",
+		},
+		{
+			name:   "不带 mode 时 fetch 发的 JSON",
+			method: http.MethodPost,
+			path:   handler.OAuthCallbackPath,
+			body:   `{"apiKey":"user_secret","state":"whatever"}`,
+			ctype:  "application/json",
+		},
+		{
+			name:   "旧链接里的长路径",
+			method: http.MethodGet,
+			path:   handler.OAuthLegacyCallbackPath + "?state=whatever&apiKey=user_secret",
+		},
+	}
 
-	if w.Code == http.StatusUnauthorized {
-		t.Fatal("回调被 AdminAuth 挡住了，浏览器跳转永远不会带令牌")
-	}
-	// 账号服务没配（测试里是 nil），所以这里走到的是「服务未启用」这条分支，
-	// 但关键结论一样：请求进得来，是被当成一次真实回调处理的。
-	if w.Code != http.StatusSeeOther {
-		t.Fatalf("期望 303 跳回前端，实际 %d", w.Code)
-	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var body io.Reader
+			if tc.body != "" {
+				body = strings.NewReader(tc.body)
+			}
+			req := httptest.NewRequest(tc.method, tc.path, body)
+			if tc.ctype != "" {
+				req.Header.Set("Content-Type", tc.ctype)
+			}
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
 
-	location := w.Header().Get("Location")
-	if !strings.HasPrefix(location, "/accounts?") {
-		t.Fatalf("跳转目标应指回账号页，实际 %q", location)
-	}
-	// 这条是关键：303 会留在浏览器历史里，密钥绝不能出现在这个地址上。
-	if strings.Contains(location, "user_secret") {
-		t.Fatalf("密钥出现在了跳转地址里：%q", location)
+			if w.Code == http.StatusUnauthorized {
+				t.Fatal("回调被 AdminAuth 挡住了，studio 的请求永远不会带令牌")
+			}
+			if w.Code == http.StatusNotFound {
+				t.Fatal("回调路由没注册到这条路径上")
+			}
+			// 账号服务没配（测试里是 nil），所以这里走到的是「服务未启用」这条
+			// 分支，但关键结论一样：请求进得来，是被当成一次真实回调处理的。
+			if w.Code != http.StatusSeeOther {
+				t.Fatalf("期望 303 跳回前端，实际 %d", w.Code)
+			}
+
+			location := w.Header().Get("Location")
+			if !strings.HasPrefix(location, "/accounts?") {
+				t.Fatalf("跳转目标应指回账号页，实际 %q", location)
+			}
+			// 这条是关键：303 会留在浏览器历史里，密钥绝不能出现在这个地址上。
+			if strings.Contains(location, "user_secret") {
+				t.Fatalf("密钥出现在了跳转地址里：%q", location)
+			}
+		})
 	}
 }
 

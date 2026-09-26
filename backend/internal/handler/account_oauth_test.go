@@ -125,7 +125,7 @@ func TestOAuthCallbackURLFromRequest(t *testing.T) {
 		{
 			name: "本机直连",
 			host: "127.0.0.1:8080",
-			want: "http://127.0.0.1:8080" + oauthCallbackPath,
+			want: "http://127.0.0.1:8080" + OAuthCallbackPath,
 		},
 		{
 			name: "反代终止了 TLS",
@@ -133,7 +133,7 @@ func TestOAuthCallbackURLFromRequest(t *testing.T) {
 			headers: map[string]string{
 				"X-Forwarded-Proto": "https",
 			},
-			want: "https://panel.example.com" + oauthCallbackPath,
+			want: "https://panel.example.com" + OAuthCallbackPath,
 		},
 		{
 			name: "代理链里带多个 proto",
@@ -141,7 +141,7 @@ func TestOAuthCallbackURLFromRequest(t *testing.T) {
 			headers: map[string]string{
 				"X-Forwarded-Proto": "https, http",
 			},
-			want: "https://panel.example.com" + oauthCallbackPath,
+			want: "https://panel.example.com" + OAuthCallbackPath,
 		},
 	}
 
@@ -172,7 +172,7 @@ func TestOAuthCallbackURLOverride(t *testing.T) {
 	c := newTestGinContext(req)
 
 	// 结尾多写的斜杠要吃掉，否则会拼出 //api/...
-	want := "https://pool.example.com" + oauthCallbackPath
+	want := "https://pool.example.com" + OAuthCallbackPath
 	if got := h.oauthCallbackURL(c); got != want {
 		t.Errorf("callback = %q，期望 %q", got, want)
 	}
@@ -191,6 +191,145 @@ func TestOAuthCallbackURLRejectsBadHost(t *testing.T) {
 		c := newTestGinContext(req)
 		if got := h.oauthCallbackURL(c); got != "" {
 			t.Errorf("Host %q 应当被拒绝，实际拼出 %q", host, got)
+		}
+	}
+}
+
+// TestReadOAuthCallbackPayload 盯住 studio 递结果的那几种形状。
+//
+// 这条测试对应一个真实踩过的坑：这套流程最初只从 query 里取密钥，因为当初
+// 是照着官方 CLI 的**服务端**代码反推契约的——那个服务端为了兼容旧版，
+// GET / 表单 / JSON 三种都收，于是看起来「带 query 跳回来」也像正常路径。
+// 实际 studio 一律用 POST 递结果，只收 query 的实现在真机上一步都走不通。
+func TestReadOAuthCallbackPayload(t *testing.T) {
+	cases := []struct {
+		name        string
+		method      string
+		url         string
+		contentType string
+		body        string
+		wantKey     string
+		wantState   string
+		wantErr     string
+	}{
+		{
+			name:        "表单提交：mode=redirect 走的就是这条",
+			method:      http.MethodPost,
+			url:         OAuthCallbackPath,
+			contentType: "application/x-www-form-urlencoded",
+			body:        "apiKey=user_abc&state=s1&userId=u1&userName=alice&keyName=cli",
+			wantKey:     "user_abc",
+			wantState:   "s1",
+		},
+		{
+			name:        "JSON 提交：不带 mode 时 fetch 发的那包",
+			method:      http.MethodPost,
+			url:         OAuthCallbackPath,
+			contentType: "application/json",
+			body:        `{"apiKey":"user_abc","state":"s1","userId":"u1","userName":"alice","keyName":"cli"}`,
+			wantKey:     "user_abc",
+			wantState:   "s1",
+		},
+		{
+			name:      "头标错了，但内容看得出来是 JSON",
+			method:    http.MethodPost,
+			url:       OAuthCallbackPath,
+			body:      `{"apiKey":"user_abc","state":"s1"}`,
+			wantKey:   "user_abc",
+			wantState: "s1",
+		},
+		{
+			name:      "旧版的 query 跳转",
+			method:    http.MethodGet,
+			url:       OAuthCallbackPath + "?apiKey=user_abc&state=s1",
+			wantKey:   "user_abc",
+			wantState: "s1",
+		},
+		{
+			name:      "用户在站上点了拒绝",
+			method:    http.MethodPost,
+			url:       OAuthCallbackPath,
+			body:      "error=access_denied&state=s1",
+			wantState: "s1",
+			wantErr:   "access_denied",
+		},
+		{
+			name:   "空请求体",
+			method: http.MethodPost,
+			url:    OAuthCallbackPath,
+			body:   "",
+		},
+		{
+			name:   "既不是键值也不是 JSON",
+			method: http.MethodPost,
+			url:    OAuthCallbackPath,
+			body:   "%%%not-a-query%%%",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var body io.Reader
+			if tc.body != "" {
+				body = strings.NewReader(tc.body)
+			}
+			req := httptest.NewRequest(tc.method, tc.url, body)
+			if tc.contentType != "" {
+				req.Header.Set("Content-Type", tc.contentType)
+			}
+
+			got := readOAuthCallbackPayload(newTestGinContext(req))
+			if got.APIKey != tc.wantKey {
+				t.Errorf("apiKey = %q，期望 %q", got.APIKey, tc.wantKey)
+			}
+			if got.State != tc.wantState {
+				t.Errorf("state = %q，期望 %q", got.State, tc.wantState)
+			}
+			if got.Error != tc.wantErr {
+				t.Errorf("error = %q，期望 %q", got.Error, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestReadOAuthCallbackPayloadStopsAtSizeLimit 确认超长请求体不会一路读下去。
+//
+// 这条路径在鉴权之外，任何人都能打。不封顶的话，一个几十兆的请求体就能
+// 换一份等量的内存。
+func TestReadOAuthCallbackPayloadStopsAtSizeLimit(t *testing.T) {
+	body := "apiKey=user_abc&state=s1&pad=" + strings.Repeat("x", oauthCallbackMaxBody*2)
+	req := httptest.NewRequest(http.MethodPost, OAuthCallbackPath, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	got := readOAuthCallbackPayload(newTestGinContext(req))
+	if got.APIKey != "user_abc" {
+		t.Errorf("截断前的那段应当照常解析出来，实际拿到 %q", got.APIKey)
+	}
+}
+
+// TestIsLoopbackBase 确认「回调地址指不指向本机」判得对。
+//
+// 这个判断决定前端给哪种引导：studio 只接受 localhost 的回调地址，指向远程
+// 域名时它连授权界面都不给进。判错了，用户就会拿着一份必然失败的引导去试。
+func TestIsLoopbackBase(t *testing.T) {
+	cases := []struct {
+		url  string
+		want bool
+	}{
+		{"http://127.0.0.1:8080" + OAuthCallbackPath, true},
+		{"http://localhost:8080" + OAuthCallbackPath, true},
+		{"http://[::1]:8080" + OAuthCallbackPath, true},
+		{"http://127.0.0.2:8080" + OAuthCallbackPath, true},
+		{"https://panel.example.com" + OAuthCallbackPath, false},
+		{"http://192.168.1.22:8080" + OAuthCallbackPath, false},
+		{"http://127.0.0.1.evil.com" + OAuthCallbackPath, false},
+		{"", false},
+		{"不是地址", false},
+	}
+
+	for _, tc := range cases {
+		if got := isLoopbackBase(tc.url); got != tc.want {
+			t.Errorf("isLoopbackBase(%q) = %v，期望 %v", tc.url, got, tc.want)
 		}
 	}
 }

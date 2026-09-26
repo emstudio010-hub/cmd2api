@@ -438,6 +438,43 @@ check(u"校验失败时账号没有建出来",
       call("GET", "/api/accounts?platform=commandcode&keyword="
            + urllib.parse.quote(u"待收尾-" + RUN_ID), token=token)[1].get("total") == 0, None)
 
+# ---- 改密码 ----
+#
+# 真改一遍再改回来。这条以前没被覆盖，而它是两个「改账号」操作里更安全攸关的
+# 那个：改错了人就登不进来了。只验「接口返回 200」不够——得验旧密码真的失效、
+# 新密码真的能用，那两个才是用户能感知的结果。
+print(u"\n[改密码]")
+TMP_PASSWORD = "smoke-tmp-" + RUN_ID
+
+status, body = call("POST", "/api/auth/password",
+                    {"current_password": "definitely-wrong", "new_password": TMP_PASSWORD},
+                    token=token)
+check(u"当前密码填错时拒绝改", status == 400, (status, body))
+
+status, body = call("POST", "/api/auth/password",
+                    {"current_password": PASSWORD, "new_password": "short"}, token=token)
+check(u"新密码少于 8 位时拒绝", status == 400, (status, body))
+
+status, body = call("POST", "/api/auth/password",
+                    {"current_password": PASSWORD, "new_password": TMP_PASSWORD}, token=token)
+check(u"改密码成功", status == 200, (status, body))
+
+status, body = call("POST", "/api/auth/login", {"email": EMAIL, "password": PASSWORD})
+check(u"旧密码立即失效", status == 401, (status, body))
+
+status, body = call("POST", "/api/auth/login", {"email": EMAIL, "password": TMP_PASSWORD})
+check(u"新密码能登录", status == 200 and "token" in body, (status, body))
+token = body.get("token", token)
+
+# 改回去，别把这个实例的密码留在测试值上——留在测试值上等于把管理员锁在外面。
+status, body = call("POST", "/api/auth/password",
+                    {"current_password": TMP_PASSWORD, "new_password": PASSWORD}, token=token)
+check(u"改回原密码", status == 200, (status, body))
+
+status, body = call("POST", "/api/auth/login", {"email": EMAIL, "password": PASSWORD})
+check(u"原密码恢复可用", status == 200 and "token" in body, (status, body))
+token = body.get("token", token)
+
 # ---- 登录用户名与密码 ----
 print(u"\n[登录用户名]")
 status, body = call("PUT", "/api/auth/profile",

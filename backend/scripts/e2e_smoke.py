@@ -4,10 +4,23 @@
 
 跑之前先起好服务和 Postgres，然后：
 
-    python scripts/e2e_smoke.py http://127.0.0.1:18080
+    python scripts/e2e_smoke.py http://127.0.0.1:8080
 
 用 Python 而不是 curl 是因为要精确控制 UTF-8 编码——Windows 控制台会把
 中文 payload 转成 GBK，测出来的乱码是终端的问题而不是服务端的问题。
+
+登录用的管理员必须已经存在：脚本不建号，只登录。默认端口对着
+docker-compose.yml，账号密码要从你的 .env 里拿（就是 BOOTSTRAP_ADMIN_*
+那两个），例如：
+
+    set -a; . ./.env; set +a
+    CC_ADMIN_EMAIL="$BOOTSTRAP_ADMIN_EMAIL" \\
+    CC_ADMIN_PASSWORD="$BOOTSTRAP_ADMIN_PASSWORD" \\
+    python backend/scripts/e2e_smoke.py http://127.0.0.1:8080
+
+注意 BOOTSTRAP_ADMIN_PASSWORD 只在**首次启动、库里还没有管理员**时生效。
+启动之后再去 .env 改它，密码不会跟着变——这是这个脚本最容易卡住的地方，
+所以登录失败时下面会把这句话再提醒一遍。
 """
 from __future__ import print_function
 
@@ -18,9 +31,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:18080"
-EMAIL = os.environ.get("CC_ADMIN_EMAIL", "admin@test.local")
-PASSWORD = os.environ.get("CC_ADMIN_PASSWORD", "testpass123")
+BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8080"
+# 不给编造的默认值：猜一个不存在的账号只会换来一句看不懂的 401。
+EMAIL = os.environ.get("CC_ADMIN_EMAIL", "")
+PASSWORD = os.environ.get("CC_ADMIN_PASSWORD", "")
 
 passed = []
 failed = []
@@ -108,7 +122,16 @@ status, body = call("POST", "/api/auth/login", {"email": EMAIL, "password": PASS
 check(u"管理员登录", status == 200 and "token" in body, (status, body))
 token = body.get("token") if status == 200 else None
 if not token:
-    print(u"\n登录失败，后续测试无法继续。请确认服务已启动且管理员已初始化。")
+    print(u"\n登录失败，后续测试无法继续。")
+    print(u"  目标地址：%s" % BASE)
+    print(u"  登录账号：%s" % (EMAIL or u"（没给，CC_ADMIN_EMAIL 是空的）"))
+    if not EMAIL or not PASSWORD:
+        print(u"  先把 .env 里的 BOOTSTRAP_ADMIN_EMAIL / BOOTSTRAP_ADMIN_PASSWORD")
+        print(u"  导出成 CC_ADMIN_EMAIL / CC_ADMIN_PASSWORD，见本文件开头的说明。")
+    else:
+        print(u"  账号密码对不上。注意 BOOTSTRAP_ADMIN_PASSWORD 只在首次启动、")
+        print(u"  库里还没有管理员时生效；启动后再改 .env，密码不会跟着变。")
+        print(u"  另外确认没打错端口——默认是 8080，和你 docker-compose 的映射一致。")
     sys.exit(1)
 
 status, body = call("POST", "/api/auth/login", {"email": EMAIL, "password": "wrong"})

@@ -133,6 +133,23 @@ cd backend && go generate ./ent
 cd backend && go test ./...
 ```
 
+单元测试之外还有一个端到端冒烟脚本，对着**真的跑起来的服务**发请求，覆盖登录、
+分组、账号、API Key、中转入口这些串起来才看得出的路径：
+
+```bash
+set -a; . ./.env; set +a          # 从 .env 取管理员账号
+CC_ADMIN_EMAIL="$BOOTSTRAP_ADMIN_EMAIL" \
+CC_ADMIN_PASSWORD="$BOOTSTRAP_ADMIN_PASSWORD" \
+python backend/scripts/e2e_smoke.py http://127.0.0.1:8080
+```
+
+它只登录、不建号，所以 `BOOTSTRAP_ADMIN_PASSWORD` 必须已经生效过。这里有个坑：
+那个变量只在**首次启动、库里还没有管理员**时起作用，启动之后再去 `.env` 改它，
+管理员密码不会跟着变——脚本检测到登录失败时会把这句话再提醒一遍。
+
+它每次运行都用带时间戳的随机后缀命名测试资源，所以对着已经有数据的实例反复跑
+也不会撞名、不会搅乱真实数据。
+
 ---
 
 ## 项目结构

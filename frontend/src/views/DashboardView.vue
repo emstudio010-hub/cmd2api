@@ -19,6 +19,7 @@ import { toMessage } from '@/api/client'
 import type { DashboardResponse } from '@/api/types'
 import { useTimeRange } from '@/composables/useTimeRange'
 import { formatCompact, formatCost, formatDateTime, formatDateTimeShort, formatDuration, formatNumber, formatPercent } from '@/utils/format'
+import { PLATFORMS } from '@/utils/platforms'
 
 const data = ref<DashboardResponse | null>(null)
 const loading = ref(true)
@@ -53,6 +54,16 @@ const rangeLabel = computed(() => {
 })
 
 const bucketLabel = computed(() => (data.value?.runtime.bucket === 'day' ? '按天聚合' : '按小时聚合'))
+
+/**
+ * 账号池的平台分布。后端只回有账号的平台，计数为 0 的平台不占位置。
+ */
+const platformCounts = computed(() => {
+  const raw = data.value?.runtime.accounts_by_platform ?? {}
+  return PLATFORMS.map((item) => ({ meta: item, count: raw[item.value] ?? 0 })).filter(
+    (item) => item.count > 0,
+  )
+})
 
 const hasTraffic = computed(() => (data.value?.summary.requests ?? 0) > 0)
 
@@ -209,6 +220,15 @@ onMounted(() => {
           <Badge tone="accent" dot>
             账号 {{ data.runtime.accounts_active }} / {{ data.runtime.accounts_total }} 可用
           </Badge>
+          <!-- 账号池的平台构成：Command Code 1 · OpenCode 1 -->
+          <Badge
+            v-for="item in platformCounts"
+            :key="item.meta.value"
+            :tone="item.meta.tone"
+            dot
+          >
+            {{ item.meta.label }} {{ item.count }}
+          </Badge>
           <Badge tone="neutral" dot>下游密钥 {{ data.runtime.api_keys_total }}</Badge>
           <Badge tone="info" dot>{{ bucketLabel }}</Badge>
         </template>
@@ -323,7 +343,7 @@ onMounted(() => {
         <EmptyState
           icon="activity"
           title="所选时间范围内没有请求"
-          description="如果刚部署完还没接入客户端，请先在上游账号页添加 Command Code 账号，再签发一把下游密钥。"
+          description="如果刚部署完还没接入客户端，请先在上游账号页添加账号（Command Code 或 OpenCode），再签发一把下游密钥。"
         >
           <RouterLink :to="{ name: 'accounts' }">
             <Button variant="primary" size="sm">去添加账号</Button>

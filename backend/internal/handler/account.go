@@ -226,8 +226,13 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 }
 
 type updateAccountRequest struct {
-	Name           *string  `json:"name"`
-	Notes          *string  `json:"notes"`
+	Name *string `json:"name"`
+	// Platform 刻意不接受：它决定凭证格式与上游协议，改了等于换账号。
+	Notes *string `json:"notes"`
+	// AccountMode / BaseURL 仅对 OpenCode 账号生效。
+	// 传 base_url: "" 表示改回用该模式的默认地址。
+	AccountMode    *string  `json:"account_mode"`
+	BaseURL        *string  `json:"base_url"`
 	APIKey         *string  `json:"api_key"`
 	Concurrency    *int     `json:"concurrency"`
 	Priority       *int     `json:"priority"`
@@ -262,6 +267,8 @@ func (h *Handler) UpdateAccount(c *gin.Context) {
 		Name:           req.Name,
 		Notes:          req.Notes,
 		APIKey:         req.APIKey,
+		AccountMode:    req.AccountMode,
+		BaseURL:        req.BaseURL,
 		Concurrency:    req.Concurrency,
 		Priority:       req.Priority,
 		RateMultiplier: req.RateMultiplier,

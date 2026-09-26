@@ -255,7 +255,12 @@ func (h *Handler) DeleteAPIKey(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.client.APIKey.DeleteOneID(id).Exec(c.Request.Context()); err != nil {
+	// 软删除：密钥被 usage_logs.api_key_id 引用，硬删除会被外键挡住，
+	// 而且历史用量会失去归属。鉴权查询本来就带 deleted_at IS NULL，
+	// 删掉的密钥立刻失效。
+	if err := h.client.APIKey.UpdateOneID(id).
+		SetDeletedAt(time.Now()).
+		Exec(c.Request.Context()); err != nil {
 		if isNotFound(err) {
 			fail(c, http.StatusNotFound, "密钥不存在")
 			return

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -34,6 +35,37 @@ func (c *Client) openCodeGenerate(ctx context.Context, baseURL, apiKey string, b
 	return c.http.Do(req)
 }
 
+// probeModelPreference 是挑探活模型时的偏好关键词，越靠前越优先。
+//
+// 探活每轮每个账号都要跑一次，挑贵的模型纯属烧钱。命不中就退回列表第一个。
+var probeModelPreference = []string{"flash", "mini", "lite", "haiku", "small", "m2.5", "m2.7"}
+
+// pickProbeModel 从该部署实际支持的模型列表里挑一个探活用模型。
+//
+// 绝不能写死模型名。踩过的坑：照搬 Command Code 的 deepseek/deepseek-v4-flash
+// 去探 OpenCode，上游直接回 "Model deepseek/deepseek-v4-flash is not supported"，
+// 于是**每个 OpenCode 账号**都会被判成不可用，连续失败几次后被自动禁用。
+// 而 Go 档（minimax-m3 / kimi-k3 / glm-5.2…）和 Zen 档（claude-* / gpt-*）
+// 的模型集合本来就完全不同，还会随上游调整——写死必然过期。
+// apiKey 必须带上：探活要问的是「**这个账号**能用哪些模型」。
+// 真实 OpenCode 的 /models 恰好是公开端点，不带密钥也能拿到列表，
+// 所以这个疏漏一开始没暴露；但换个要求鉴权的上游就会直接 401，
+// 探活会以「拿不到模型列表」失败，看起来像网络问题，实则是自己没带凭证。
+func (c *Client) pickProbeModel(ctx context.Context, baseURL, apiKey string) string {
+	models := c.openCodeModels(ctx, baseURL, apiKey)
+	if len(models) == 0 {
+		return ""
+	}
+	for _, want := range probeModelPreference {
+		for _, m := range models {
+			if strings.Contains(strings.ToLower(m.ID), want) {
+				return m.ID
+			}
+		}
+	}
+	return models[0].ID
+}
+
 // openCodeProbe 探活一个 OpenCode 账号。
 //
 // 和 Command Code 的探活思路一致：发一次极小的真实生成请求，而不是只验证
@@ -41,9 +73,19 @@ func (c *Client) openCodeGenerate(ctx context.Context, baseURL, apiKey string, b
 func (c *Client) openCodeProbe(ctx context.Context, baseURL, apiKey string) ProbeResult {
 	started := time.Now()
 
+	// /models 是公开端点（不需要鉴权），所以它拿不到只说明网络有问题，
+	// 而不是账号有问题——这种情况下探活无法得出结论。
+	model := c.pickProbeModel(ctx, baseURL, apiKey)
+	if model == "" {
+		return ProbeResult{Latency: time.Since(started), Err: &MappedError{
+			Status: http.StatusBadGateway, Type: "upstream_error",
+			Message: "拿不到 OpenCode 的模型列表，无法完成探活（检查网络或代理配置）",
+		}}
+	}
+
 	// 一律用非流式探活：省掉解析流的开销，而且出错时错误体是完整的 JSON。
 	payload := map[string]any{
-		"model":      probeModel,
+		"model":      model,
 		"messages":   []map[string]any{{"role": "user", "content": probePrompt}},
 		"max_tokens": 1,
 		"stream":     false,
@@ -73,7 +115,11 @@ func (c *Client) openCodeProbe(ctx context.Context, baseURL, apiKey string) Prob
 
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8*1024))
 	if resp.StatusCode != http.StatusOK {
-		return ProbeResult{Latency: time.Since(started), Err: mapOpenCodeError(resp.StatusCode, raw)}
+		mapped := mapOpenCodeError(resp.StatusCode, raw)
+		// 把探活用的模型名带上：模型不可用与密钥无效的上游措辞可能很像，
+		// 不写清楚的话排障时无从判断到底哪一边有问题。
+		mapped.Message = fmt.Sprintf("%s（探活模型：%s）", mapped.Message, model)
+		return ProbeResult{Latency: time.Since(started), Err: mapped}
 	}
 
 	// 状态 200 也要确认真的返回了内容：有的兼容层会在额度耗尽时
@@ -120,7 +166,11 @@ func (c *Client) openCodeModels(ctx context.Context, baseURL, apiKey string) []M
 		c.logger.Warn("构造 OpenCode 模型列表请求失败", "err", err)
 		return nil
 	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
+	// /models 是公开端点，没有密钥时不要发一个空的 Bearer 头——
+	// 某些网关会把格式不合法的 Authorization 直接判为 401。
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
 	req.Header.Set("User-Agent", "cmd2api")
 
 	resp, err := c.http.Do(req)

@@ -341,7 +341,11 @@ func (s *Scheduler) MarkOverloaded(ctx context.Context, accountID int64, until t
 //
 // 返回是否本次触发了自动禁用。
 func (s *Scheduler) MarkFailure(ctx context.Context, accountID int64, cause error) bool {
-	acc, err := s.client.Account.Get(ctx, accountID)
+	// 带 soft-delete 过滤：已删除的账号不该再被写失败计数，
+	// 更不该被这条路径重新置成禁用状态。
+	acc, err := s.client.Account.Query().
+		Where(account.IDEQ(accountID), account.DeletedAtIsNil()).
+		Only(ctx)
 	if err != nil {
 		s.logger.Warn("读取账号失败，跳过失败计数", "account_id", accountID, "err", err)
 		return false

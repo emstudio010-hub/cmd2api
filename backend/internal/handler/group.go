@@ -230,7 +230,11 @@ func (h *Handler) DeleteGroup(c *gin.Context) {
 		return
 	}
 
-	if err := h.client.Group.DeleteOneID(id).Exec(ctx); err != nil {
+	// 软删除：置 deleted_at 而不是真删。分组被 usage_logs.group_id 引用，
+	// 硬删除会被外键挡住，而且会让历史用量的分组维度凭空消失。
+	if err := h.client.Group.UpdateOneID(id).
+		SetDeletedAt(time.Now()).
+		Exec(ctx); err != nil {
 		if isNotFound(err) {
 			fail(c, http.StatusNotFound, "分组不存在")
 			return

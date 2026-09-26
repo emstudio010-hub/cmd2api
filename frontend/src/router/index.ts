@@ -35,7 +35,7 @@ const routes: RouteRecordRaw[] = [
         path: 'accounts',
         name: 'accounts',
         component: () => import('@/views/AccountsView.vue'),
-        meta: { title: '上游账号', subtitle: 'Command Code 账号池与健康状态' },
+        meta: { title: '上游账号', subtitle: 'Command Code / OpenCode 账号池与健康状态' },
       },
       {
         path: 'groups',

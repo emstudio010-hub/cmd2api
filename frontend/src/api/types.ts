@@ -5,6 +5,15 @@
 /** 账号状态。与 internal/domain 的常量一致。 */
 export type AccountStatus = 'active' | 'disabled' | 'error'
 
+/** 上游平台。后端只认识这两个值。 */
+export type UpstreamPlatform = 'commandcode' | 'opencode'
+
+/**
+ * OpenCode 的计费模式：zen 按量付费、go 订阅额度。
+ * 只有 OpenCode 平台有值，Command Code 账号这里是空串。
+ */
+export type AccountMode = 'zen' | 'go'
+
 /** 分组 / 密钥状态。 */
 export type CommonStatus = 'active' | 'disabled'
 
@@ -67,6 +76,8 @@ export interface DashboardRuntime {
   accounts_active: number
   api_keys_total: number
   bucket: 'hour' | 'day' | string
+  /** 各平台的账号数，形如 {"commandcode": 3, "opencode": 1}。 */
+  accounts_by_platform: Record<string, number>
 }
 
 export interface DashboardResponse {
@@ -83,7 +94,12 @@ export interface Account {
   id: number
   name: string
   notes: string
-  platform: string
+  /** 上游平台。决定密钥校验规则与可绑定的分组。 */
+  platform: UpstreamPlatform
+  /** 计费模式（zen / go）。仅 OpenCode 有值，Command Code 是空串。 */
+  account_mode: string
+  /** 上游地址。仅 OpenCode 有值；留空时后端会回填该模式的默认地址。 */
+  base_url: string
   type: string
   status: AccountStatus | string
   error_message: string | null
@@ -116,10 +132,17 @@ export interface AccountQuery extends PageQuery {
   status?: string
   keyword?: string
   group_id?: number | null
+  platform?: string
 }
 
 export interface CreateAccountPayload {
   name: string
+  /** 必填。后端按它决定密钥校验规则，以及允许绑定哪些分组。 */
+  platform: UpstreamPlatform
+  /** 仅 OpenCode 需要（zen / go）。Command Code 传空串或不传。 */
+  account_mode?: string
+  /** 仅 OpenCode 使用。留空时后端按 account_mode 填默认地址。 */
+  base_url?: string
   notes?: string
   api_key: string
   concurrency?: number
@@ -129,9 +152,16 @@ export interface CreateAccountPayload {
   expires_at?: string | null
 }
 
-/** 更新时字段全部可选；expires_at 传空串表示清除过期时间。 */
+/**
+ * 更新时字段全部可选；expires_at 传空串表示清除过期时间。
+ *
+ * 注意这里**没有** platform：后端不接受改平台，传了也没用，
+ * 干脆从类型上就断掉这条路。
+ */
 export interface UpdateAccountPayload {
   name?: string
+  account_mode?: string
+  base_url?: string
   notes?: string
   api_key?: string
   concurrency?: number
@@ -151,6 +181,12 @@ export interface AccountCheckResult {
 
 export interface BatchImportPayload {
   keys: string
+  /** 必填。整批共用同一个平台，OpenCode 的分组不能装 Command Code 账号。 */
+  platform: UpstreamPlatform
+  /** 仅 OpenCode 需要（zen / go）。 */
+  account_mode?: string
+  /** 仅 OpenCode 使用。留空时后端按 account_mode 填默认地址。 */
+  base_url?: string
   group_ids?: number[]
   concurrency?: number
   priority?: number
@@ -173,6 +209,8 @@ export interface Group {
   id: number
   name: string
   description: string
+  /** 分组所属平台。创建时定下，之后不可修改，只能装同平台的账号。 */
+  platform: UpstreamPlatform
   rate_multiplier: number
   status: CommonStatus | string
   account_count: number
@@ -189,6 +227,8 @@ export interface GroupListResponse {
 export interface GroupPayload {
   name: string
   description?: string
+  /** 创建时必填；更新时后端只接受与原值相同的平台。 */
+  platform?: UpstreamPlatform
   rate_multiplier?: number
   status?: string
 }

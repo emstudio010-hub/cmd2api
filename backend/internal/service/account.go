@@ -63,10 +63,15 @@ type CreateAccountInput struct {
 }
 
 // UpdateAccountInput 是修改账号的输入。指针为 nil 表示不改该字段。
+//
+// 注意没有 Platform 字段：平台决定凭证格式与上游协议，改了等于换了一个账号，
+// 应该新建而不是就地修改。
 type UpdateAccountInput struct {
 	Name           *string
 	Notes          *string
 	APIKey         *string
+	AccountMode    *string
+	BaseURL        *string
 	Concurrency    *int
 	Priority       *int
 	RateMultiplier *float64
@@ -185,6 +190,19 @@ func (s *AccountService) Create(ctx context.Context, in CreateAccountInput) (*en
 	return created, nil
 }
 
+// getActiveAccount 按 ID 取一个**未被软删除**的账号。
+//
+// 本项目的软删除没有用 ent 的拦截器自动改写查询，而是靠每处查询自己带上
+// `deleted_at IS NULL`。代价就是这个：漏掉一处，就会读到一个"已经删掉"的账号。
+// 实测踩过——删除接口因此可以重复删除同一个账号、Update 还能改已删除的账号。
+//
+// 所以规则是：凡是要按 ID 拿账号，一律走这里，不要在别处直接 client.Account.Get。
+func (s *AccountService) getActiveAccount(ctx context.Context, id int64) (*ent.Account, error) {
+	return s.client.Account.Query().
+		Where(account.IDEQ(id), account.DeletedAtIsNil()).
+		Only(ctx)
+}
+
 // reloadWithGroups 重新读取账号并带上分组边。
 //
 // 读失败时退回原对象：宁可少一个 group_ids 字段，也不该让一次成功的
@@ -203,6 +221,17 @@ func (s *AccountService) reloadWithGroups(ctx context.Context, acc *ent.Account)
 
 // Update 修改账号。
 func (s *AccountService) Update(ctx context.Context, id int64, in UpdateAccountInput) (*ent.Account, error) {
+	// 平台在修改过程中是常量，但校验密钥格式、写 extra 都要用到它，
+	// 所以先取出来。取不到就直接报错，后面的逻辑全依赖它。
+	current, err := s.getActiveAccount(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	platform := current.Platform
+	if platform == "" {
+		platform = domain.PlatformCommandCode
+	}
+
 	builder := s.client.Account.UpdateOneID(id)
 
 	if in.Name != nil {
@@ -217,7 +246,14 @@ func (s *AccountService) Update(ctx context.Context, id int64, in UpdateAccountI
 	}
 	if in.APIKey != nil {
 		apiKey := strings.TrimSpace(*in.APIKey)
-		if !strings.HasPrefix(apiKey, domain.CommandCodeKeyPrefix) {
+		if apiKey == "" {
+			return nil, errors.New("密钥不能为空")
+		}
+		// 前缀校验只对 Command Code 做。这里曾经漏掉了平台判断，
+		// 导致 OpenCode 账号的密钥永远改不了——改一次报一次
+		// 「密钥格式不正确，Command Code 的密钥应以 user_ 开头」，
+		// 而那个账号根本不是 Command Code 平台的。
+		if platform == domain.PlatformCommandCode && !strings.HasPrefix(apiKey, domain.CommandCodeKeyPrefix) {
 			return nil, ErrInvalidAPIKey
 		}
 		encrypted, err := s.vault.Encrypt(apiKey)
@@ -227,10 +263,37 @@ func (s *AccountService) Update(ctx context.Context, id int64, in UpdateAccountI
 		builder = builder.SetCredentials(map[string]any{"api_key_encrypted": encrypted})
 		// 换了密钥就是换了账号身份，旧的会话状态必须丢掉，
 		// 否则新账号会顶着旧账号的 session 和指纹发请求。
-		if old, err := s.client.Account.Get(ctx, id); err == nil {
-			if prev, ok := s.decryptKey(old); ok {
-				s.relayClient.ForgetKey(prev)
+		if prev, ok := s.decryptKey(current); ok {
+			s.relayClient.ForgetKey(prev)
+		}
+	}
+
+	// account_mode / base_url 存在 extra 里，只有 OpenCode 账号有。
+	// 改动它们等于换上游地址，同样要清掉旧的会话缓存。
+	if platform == domain.PlatformOpenCode && (in.AccountMode != nil || in.BaseURL != nil) {
+		extra := map[string]any{}
+		for k, v := range current.Extra {
+			extra[k] = v
+		}
+		if in.AccountMode != nil {
+			mode := strings.TrimSpace(*in.AccountMode)
+			if mode != domain.AccountModeZen && mode != domain.AccountModeGo {
+				return nil, ErrInvalidAccountMode
 			}
+			extra["account_mode"] = mode
+		}
+		if in.BaseURL != nil {
+			// 传空串表示改回「用默认地址」，所以是删除而不是存空值——
+			// 存空串会让将来改默认地址时被这条陈旧记录钉死。
+			if base := strings.TrimSpace(*in.BaseURL); base != "" {
+				extra["base_url"] = base
+			} else {
+				delete(extra, "base_url")
+			}
+		}
+		builder = builder.SetExtra(extra)
+		if prev, ok := s.decryptKey(current); ok {
+			s.relayClient.ForgetKey(prev)
 		}
 	}
 	if in.Concurrency != nil {
@@ -287,12 +350,23 @@ func (s *AccountService) Update(ctx context.Context, id int64, in UpdateAccountI
 }
 
 // Delete 软删除账号，并清掉它的内存状态。
+//
+// 必须走 UPDATE 置 deleted_at，不能用 DeleteOneID。
+//
+// 踩过的坑：软删除原来只做了一半——查询都带了 `deleted_at IS NULL`，
+// 删除却还是硬删除。于是只要账号有用量记录，usage_logs.account_id 的
+// 外键就会挡住删除，接口直接 500。更糟的是这个 bug 只在"账号已经被用过"
+// 之后才出现，全新部署时测不出来。
+//
+// 软删除同时也保住了历史用量：删掉账号不该让统计里的历史数据凭空消失。
 func (s *AccountService) Delete(ctx context.Context, id int64) error {
-	acc, err := s.client.Account.Get(ctx, id)
+	acc, err := s.getActiveAccount(ctx, id)
 	if err != nil {
 		return err
 	}
-	if err := s.client.Account.DeleteOneID(id).Exec(ctx); err != nil {
+	if err := s.client.Account.UpdateOneID(id).
+		SetDeletedAt(time.Now()).
+		Exec(ctx); err != nil {
 		return err
 	}
 	// 释放调度器里该账号的并发闸门与上游会话状态，
@@ -367,7 +441,7 @@ func (s *AccountService) setGroups(ctx context.Context, accountID int64, groupID
 
 // Check 探活单个账号并回写结果。
 func (s *AccountService) Check(ctx context.Context, id int64) (*relay.ProbeResult, error) {
-	acc, err := s.client.Account.Get(ctx, id)
+	acc, err := s.getActiveAccount(ctx, id)
 	if err != nil {
 		return nil, err
 	}

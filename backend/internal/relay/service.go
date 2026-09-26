@@ -283,25 +283,23 @@ func (s *Service) attemptOpenCode(
 	// 把 SSE 读成 CC 事件流，之后就走与 Command Code 完全相同的下游链路。
 	adapter := newOpenAIStreamAdapter()
 	read := func(handle func(*CCEvent)) error {
-		var handleErr error
-		err := s.client.readOpenAISSE(ctx, resp.Body, s.cfg.CommandCC.StreamIdleTimeout, func(payload string) {
-			if handleErr != nil {
-				return
-			}
-			for _, ev := range adapter.ParseLine(payload) {
-				handle(ev)
-			}
-		})
-		if err != nil {
-			return err
-		}
-		// 流结束：吐出最后一个工具调用和 finish 事件。
-		if handleErr == nil {
+		err := s.client.readOpenAISSE(ctx, resp.Body, s.cfg.CommandCC.StreamIdleTimeout, adapter.emitTo(handle))
+
+		// 读结束就一定要把适配器里攒着的东西吐出来，**不能因为读出错就跳过**。
+		//
+		// 踩过的坑：上游发完内容后不关连接（SSE 的长连接本来就不该被客户端
+		// 当成"读完即结束"），读操作要等空闲看门狗超时才返回错误。原来写成
+		// `if err != nil { return err }` 直接跳过了 flush，于是 finish 事件和
+		// 整条用量统计一起丢了——客户端看到的是"流莫名其妙结束、没有 token 数"。
+		//
+		// 但也不能无条件补 finish：上游一个完成信号都没给就断了，本来就该
+		// 判定为截断，补一个 finish 会把截断粉饰成正常结束。
+		if adapter.SawCompletion() {
 			for _, ev := range adapter.Flush() {
 				handle(ev)
 			}
 		}
-		return handleErr
+		return err
 	}
 
 	return s.streamEvents(ctx, w, req, normalized, lease.Account.ID, started, read)

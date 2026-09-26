@@ -1,4 +1,5 @@
 // UI 组件统一出口。视图里 import 一行即可，不必记住每个文件的路径。
+export { default as AccountModePicker } from './AccountModePicker.vue'
 export { default as Badge } from './Badge.vue'
 export { default as Button } from './Button.vue'
 export { default as Card } from './Card.vue'
@@ -11,6 +12,7 @@ export { default as Icon } from './Icon.vue'
 export { default as Input } from './Input.vue'
 export { default as Modal } from './Modal.vue'
 export { default as Pagination } from './Pagination.vue'
+export { default as PlatformPicker } from './PlatformPicker.vue'
 export { default as Select } from './Select.vue'
 export { default as Skeleton } from './Skeleton.vue'
 export { default as Spinner } from './Spinner.vue'

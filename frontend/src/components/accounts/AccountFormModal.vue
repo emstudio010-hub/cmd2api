@@ -1,19 +1,29 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 
+import AccountModePicker from '@/components/ui/AccountModePicker.vue'
 import Button from '@/components/ui/Button.vue'
 import Checkbox from '@/components/ui/Checkbox.vue'
 import Field from '@/components/ui/Field.vue'
 import Icon from '@/components/ui/Icon.vue'
 import Input from '@/components/ui/Input.vue'
 import Modal from '@/components/ui/Modal.vue'
+import PlatformPicker from '@/components/ui/PlatformPicker.vue'
 import Select from '@/components/ui/Select.vue'
 import Textarea from '@/components/ui/Textarea.vue'
 import { accountsApi } from '@/api/endpoints'
 import { toMessage } from '@/api/client'
-import type { Account, CreateAccountPayload, Group, UpdateAccountPayload } from '@/api/types'
+import type {
+  Account,
+  CreateAccountPayload,
+  Group,
+  UpstreamPlatform,
+  UpdateAccountPayload,
+} from '@/api/types'
 import { useToastStore } from '@/stores/toast'
 import { fromLocalInputValue, toLocalInputValue } from '@/utils/format'
+import { PLATFORMS, accountModeMeta, platformMeta } from '@/utils/platforms'
 
 const props = defineProps<{
   open: boolean
@@ -31,6 +41,17 @@ const toast = useToastStore()
 
 const isEdit = computed(() => props.account !== null)
 
+const subtitle = computed(() =>
+  isEdit.value
+    ? '留空的字段保持原值；密钥留空表示不修改；平台创建后不可更改'
+    : '先选上游平台，再填写该平台的密钥',
+)
+
+/** 上游平台。新建时为空串（必须显式选）；编辑时是后端锁定好的既有值。 */
+const platform = ref<UpstreamPlatform | ''>('')
+/** 以下两个字段只有 OpenCode 用得到。 */
+const accountMode = ref('')
+const baseUrl = ref('')
 const name = ref('')
 const apiKey = ref('')
 const notes = ref('')
@@ -59,16 +80,33 @@ function toNumber(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+const meta = computed(() => platformMeta(platform.value))
+const usesMode = computed(() => meta.value.usesMode)
+/** 当前模式留空 base_url 时会落到的地址，用作占位与提示。 */
+const defaultBaseUrl = computed(() => accountModeMeta(accountMode.value).defaultBaseUrl)
+
+/** 只列同平台的分组：跨平台的组合后端会直接 400。 */
+const platformGroups = computed(() =>
+  platform.value ? props.groups.filter((group) => group.platform === platform.value) : [],
+)
+const hiddenGroupCount = computed(() => props.groups.length - platformGroups.value.length)
+
 const errors = computed(() => {
   const out: Record<string, string> = {}
+
+  // 平台是第一个必选项，后面所有字段的形态都由它决定。
+  if (!platform.value) out.platform = '请选择上游平台'
   if (!name.value.trim()) out.name = '请输入账号名称'
 
   const key = apiKey.value.trim()
   if (!isEdit.value && !key) {
-    out.apiKey = '请输入 Command Code 密钥'
-  } else if (key && !key.startsWith('user_')) {
-    out.apiKey = '密钥格式不正确：Command Code 密钥必须以 user_ 开头'
+    out.apiKey = `请输入 ${meta.value.label} 密钥`
+  } else if (key && meta.value.keyPrefix && !key.startsWith(meta.value.keyPrefix)) {
+    // OpenCode 的 keyPrefix 是空串，这里天然跳过前缀校验。
+    out.apiKey = `密钥格式不正确：${meta.value.label} 密钥必须以 ${meta.value.keyPrefix} 开头`
   }
+
+  if (usesMode.value && !accountMode.value) out.accountMode = '请选择计费模式'
 
   if (toNumber(concurrency.value) <= 0) out.concurrency = '并发数必须大于 0'
   if (toNumber(priority.value) < 0) out.priority = '优先级不能为负数'
@@ -80,6 +118,12 @@ const valid = computed(() => Object.keys(errors.value).length === 0)
 
 function reset(): void {
   const account = props.account
+  // 编辑时平台不可改。platform 是后端后加的字段，历史数据里可能是空串，
+  // 那按老平台的语义当作 Command Code——否则卡片是只读的，表单会永远卡在
+  // 「请选择上游平台」上，连改个备注都做不到。
+  platform.value = account ? account.platform || 'commandcode' : ''
+  accountMode.value = account?.account_mode ?? ''
+  baseUrl.value = account?.base_url ?? ''
   name.value = account?.name ?? ''
   apiKey.value = ''
   notes.value = account?.notes ?? ''
@@ -93,6 +137,30 @@ function reset(): void {
   schedulable.value = account?.schedulable ?? true
   serverError.value = ''
   showKey.value = false
+}
+
+/**
+ * 切换平台。新建时才会走到这里（编辑态卡片是只读的）。
+ * OpenCode 专属字段和已选分组在换平台后都不再适用，直接清空——
+ * 留着就会拼出一个后端必然拒绝的跨平台组合。
+ */
+function onPlatformChange(value: string): void {
+  const next = PLATFORMS.find((item) => item.value === value)
+  if (!next || next.value === platform.value) return
+  platform.value = next.value
+  accountMode.value = ''
+  baseUrl.value = ''
+  groupIds.value = []
+}
+
+/**
+ * 只提交同平台的分组。分组列表没拉到时（props.groups 为空）不做过滤，
+ * 否则改一次备注就会把账号已有的分组绑定悄悄清空。
+ */
+function selectedGroupIds(): number[] {
+  if (props.groups.length === 0) return groupIds.value
+  const allowed = new Set(platformGroups.value.map((group) => group.id))
+  return groupIds.value.filter((id) => allowed.has(id))
 }
 
 watch(
@@ -128,22 +196,31 @@ function close(): void {
 
 async function submit(): Promise<void> {
   if (!valid.value || submitting.value) return
+  const selectedPlatform = platform.value
+  // valid 已经保证平台非空，这里只是把类型收窄回字面量联合。
+  if (!selectedPlatform) return
   submitting.value = true
   serverError.value = ''
   try {
     const expires = clearExpiry.value ? '' : fromLocalInputValue(expiresAt.value) || undefined
     const key = apiKey.value.trim()
+    const groups = selectedGroupIds()
+    // Command Code 没有这两个字段，显式传空串，不给后端留猜测空间。
+    const mode = usesMode.value ? accountMode.value : ''
+    const url = usesMode.value ? baseUrl.value.trim() : ''
 
     if (isEdit.value && props.account) {
       const payload: UpdateAccountPayload = {
         name: name.value.trim(),
+        account_mode: mode,
+        base_url: url,
         notes: notes.value,
         concurrency: toNumber(concurrency.value),
         priority: toNumber(priority.value),
         rate_multiplier: toNumber(multiplier.value),
         status: status.value,
         schedulable: schedulable.value,
-        group_ids: groupIds.value,
+        group_ids: groups,
       }
       // 留空就是不换密钥——不然每次改个备注都会把凭证重写一遍。
       if (key) payload.api_key = key
@@ -155,12 +232,15 @@ async function submit(): Promise<void> {
     } else {
       const payload: CreateAccountPayload = {
         name: name.value.trim(),
+        platform: selectedPlatform,
+        account_mode: mode,
+        base_url: url,
         notes: notes.value,
         api_key: key,
         concurrency: toNumber(concurrency.value),
         priority: toNumber(priority.value),
         rate_multiplier: toNumber(multiplier.value),
-        group_ids: groupIds.value,
+        group_ids: groups,
       }
       if (expires) payload.expires_at = expires
 
@@ -182,9 +262,7 @@ async function submit(): Promise<void> {
   <Modal
     :open="open"
     :title="isEdit ? '编辑账号' : '添加上游账号'"
-    :subtitle="
-      isEdit ? '留空的字段保持原值；密钥留空表示不修改' : '需要一把 Command Code 的 user_ 开头密钥'
-    "
+    :subtitle="subtitle"
     size="lg"
     @update:open="emit('update:open', $event)"
   >
@@ -197,6 +275,21 @@ async function submit(): Promise<void> {
         <span>{{ serverError }}</span>
       </p>
 
+      <!-- 平台决定表单后面所有字段的形态，所以放在最前面且做成可点选的卡片 -->
+      <Field
+        label="上游平台"
+        :required="!isEdit"
+        :error="errors.platform"
+        :hint="isEdit ? '平台创建后不可更改' : '平台决定密钥格式、计费模式与可绑定的分组'"
+      >
+        <PlatformPicker
+          :model-value="platform"
+          :disabled="isEdit"
+          :invalid="Boolean(errors.platform)"
+          @update:model-value="onPlatformChange"
+        />
+      </Field>
+
       <div class="grid gap-3.5 sm:grid-cols-2">
         <Field label="账号名称" required :error="errors.name">
           <Input v-model="name" placeholder="例如：主力账号 A" maxlength="100" />
@@ -206,14 +299,14 @@ async function submit(): Promise<void> {
           label="API Key"
           :required="!isEdit"
           :error="errors.apiKey"
-          :hint="isEdit ? '留空表示不修改当前密钥' : 'Command Code 密钥，必须以 user_ 开头'"
+          :hint="isEdit ? '留空表示不修改当前密钥' : meta.keyHint"
         >
           <div class="relative">
             <Input
               v-model="apiKey"
               :type="showKey ? 'text' : 'password'"
               :mono="true"
-              :placeholder="isEdit ? '••••••••（留空不修改）' : 'user_xxxxxxxxxxxx'"
+              :placeholder="isEdit ? '••••••••（留空不修改）' : meta.keyPlaceholder"
               autocomplete="off"            />
             <button
               type="button"
@@ -226,6 +319,27 @@ async function submit(): Promise<void> {
           </div>
         </Field>
       </div>
+
+      <!-- OpenCode 专属：计费模式必填，上游地址留空则由后端按模式回填 -->
+      <template v-if="usesMode">
+        <Field
+          label="计费模式"
+          required
+          :error="errors.accountMode"
+          hint="决定计费口径与默认上游地址"
+        >
+          <AccountModePicker v-model="accountMode" :invalid="Boolean(errors.accountMode)" />
+        </Field>
+
+        <Field label="上游地址" :hint="`留空使用默认地址 ${defaultBaseUrl}`">
+          <Input
+            v-model="baseUrl"
+            :mono="true"
+            :placeholder="defaultBaseUrl"
+            autocomplete="off"
+          />
+        </Field>
+      </template>
 
       <Field label="备注" hint="给自己看的说明，例如用途或来源">
         <Textarea v-model="notes" :rows="2" placeholder="可选" />
@@ -293,23 +407,47 @@ async function submit(): Promise<void> {
 
       <Field
         label="所属分组"
-        hint="不选分组时该账号不会被任何下游密钥使用"
+        hint="只能绑定同平台的分组；不选分组时该账号不会被任何下游密钥使用"
       >
+        <!-- 平台没选之前不知道要列哪些分组，先占个位说明规则 -->
         <div
-          v-if="groups.length === 0"
-          class="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-2xs text-warning"
+          v-if="!platform"
+          class="rounded-md border border-line bg-raised/40 px-2.5 py-2 text-2xs text-subtle"
         >
-          还没有任何分组。请先到「分组」页创建一个分组，否则该账号无法被下游调用。
+          请先选择上游平台，这里只会列出同平台的分组。
         </div>
-        <div v-else class="scroll-thin max-h-40 space-y-2 overflow-y-auto rounded-md border border-line bg-raised/40 p-2.5">
-          <Checkbox
-            v-for="group in groups"
-            :key="group.id"
-            :model-value="groupIds.includes(group.id)"
-            :label="group.name"
-            :description="`${group.account_count} 个账号 · ${group.api_key_count} 把密钥`"
-            @update:model-value="toggleGroup(group.id, $event)"
-          />
+
+        <div
+          v-else-if="platformGroups.length === 0"
+          class="space-y-1.5 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-2xs text-warning"
+        >
+          <p>
+            还没有 {{ meta.label }} 平台的分组，请先到「分组」页创建一个，否则该账号无法被下游调用。
+          </p>
+          <RouterLink
+            :to="{ name: 'groups' }"
+            class="inline-flex items-center gap-1 font-medium text-accent hover:underline"
+            @click="close"
+          >
+            去创建 {{ meta.label }} 分组
+            <Icon name="external" :size="11" />
+          </RouterLink>
+        </div>
+
+        <div v-else class="rounded-md border border-line bg-raised/40 p-2.5">
+          <div class="scroll-thin max-h-40 space-y-2 overflow-y-auto">
+            <Checkbox
+              v-for="group in platformGroups"
+              :key="group.id"
+              :model-value="groupIds.includes(group.id)"
+              :label="group.name"
+              :description="`${group.account_count} 个账号 · ${group.api_key_count} 把密钥`"
+              @update:model-value="toggleGroup(group.id, $event)"
+            />
+          </div>
+          <p v-if="hiddenGroupCount > 0" class="mt-1.5 text-2xs text-subtle">
+            另有 {{ hiddenGroupCount }} 个其它平台的分组未列出。
+          </p>
         </div>
       </Field>
     </form>

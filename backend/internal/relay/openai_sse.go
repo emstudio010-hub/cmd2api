@@ -38,6 +38,23 @@ func newOpenAIStreamAdapter() *openAIStreamAdapter {
 	return &openAIStreamAdapter{}
 }
 
+// emitTo 返回一个可直接交给流读取器的回调。
+func (a *openAIStreamAdapter) emitTo(handle func(*CCEvent)) func(string) {
+	return func(payload string) {
+		for _, ev := range a.ParseLine(payload) {
+			handle(ev)
+		}
+	}
+}
+
+// SawCompletion 表示上游是否给过完成信号（finish_reason 或 usage）。
+//
+// 用来区分两种"读结束"：上游说完成了 → 调用方应当补一个 finish 事件收尾；
+// 上游什么都没说就断了 → 不能补，那是截断，必须让下游知道。
+func (a *openAIStreamAdapter) SawCompletion() bool {
+	return a.finishReason != "" || a.usage != nil || a.sawDone
+}
+
 // openAIStreamChunk 是 OpenAI 流式响应的一个分片。
 type openAIStreamChunk struct {
 	Choices []struct {

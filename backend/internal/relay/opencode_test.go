@@ -1,9 +1,16 @@
 package relay
 
 import (
+	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"cmd2api/internal/config"
 )
 
 // collect 把适配器喂进去的行全部跑完，返回下游会收到的事件序列。
@@ -316,5 +323,139 @@ func TestMapOpenCodeError(t *testing.T) {
 	rateLimited := mapOpenCodeError(429, nil)
 	if rateLimited.Status != 429 || rateLimited.RetryAfter == 0 {
 		t.Errorf("429 应带 retry_after，得到 %+v", rateLimited)
+	}
+}
+
+// TestProbeModelComesFromPlatformList 是实测踩坑后补的回归测试。
+//
+// 真实事故：探活写死了 Command Code 的模型名（deepseek/deepseek-v4-flash），
+// 拿去探 OpenCode 时上游回 "Model deepseek/deepseek-v4-flash is not supported"。
+// 后果不是"探活失败"这么简单——每个 OpenCode 账号都会被判成不可用，
+// 连续失败达阈值后被健康检查**自动禁用**，而账号其实完全正常。
+//
+// 所以这里验证：探活模型必须来自该部署实际返回的模型列表。
+func TestProbeModelComesFromPlatformList(t *testing.T) {
+	// 模拟 OpenCode Go 的模型列表——注意它**没有**任何 Command Code 的模型名。
+	const goModels = `{"object":"list","data":[
+		{"id":"minimax-m3"},{"id":"minimax-m2.7"},{"id":"kimi-k3"},
+		{"id":"glm-5.2"},{"id":"longcat-2.0"}]}`
+
+	var requestedModel string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/models") {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(goModels))
+			return
+		}
+		// 生成端点：记下客户端用了哪个模型
+		var body struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		requestedModel = body.Model
+
+		// 复刻真实上游的行为：模型不在列表里就报错。
+		if body.Model != "minimax-m3" && body.Model != "minimax-m2.7" && body.Model != "kimi-k3" &&
+			body.Model != "glm-5.2" && body.Model != "longcat-2.0" {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":{"message":"Model ` + body.Model + ` is not supported"}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"index":0,"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer srv.Close()
+
+	client := NewClient(config.CommandCodeConfig{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	// 1. 挑出来的模型必须来自列表
+	model := client.pickProbeModel(context.Background(), srv.URL, "k")
+	if model == "" {
+		t.Fatal("应当能从列表里挑出探活模型")
+	}
+	valid := map[string]bool{"minimax-m3": true, "minimax-m2.7": true, "kimi-k3": true, "glm-5.2": true, "longcat-2.0": true}
+	if !valid[model] {
+		t.Errorf("挑出的模型 %q 不在该部署支持的列表里", model)
+	}
+	// 明确防止回归：绝不能挑出 Command Code 的模型名。
+	if model == commandCodeProbeModel {
+		t.Errorf("探活用了 Command Code 的模型名 %q，这正是当初导致账号被误禁用的原因", model)
+	}
+	// 偏好便宜模型：列表里有 m2.7，应当优先于列表第一个 m3（同样命中偏好时取先出现的）。
+	if model != "minimax-m2.7" {
+		t.Logf("提示：挑中的是 %q；偏好顺序里 flash/mini/lite/m2.7 应优先命中", model)
+	}
+
+	// 2. 真跑一次探活，确认它不因为"模型不支持"而失败
+	result := client.openCodeProbe(context.Background(), srv.URL, "some-key")
+	if result.Err != nil {
+		t.Fatalf("探活不应失败，却报了: %s", result.Err.Message)
+	}
+	if requestedModel == commandCodeProbeModel {
+		t.Errorf("实际请求用的模型是 %q —— 回归了！", requestedModel)
+	}
+	t.Logf("探活实际使用的模型: %s", requestedModel)
+}
+
+// TestProbeModelEmptyListFails 验证拿不到模型列表时明确报错而不是瞎猜。
+func TestProbeModelEmptyListFails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	client := NewClient(config.CommandCodeConfig{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if model := client.pickProbeModel(context.Background(), srv.URL, "k"); model != "" {
+		t.Errorf("列表拿不到时应返回空，得到 %q", model)
+	}
+
+	result := client.openCodeProbe(context.Background(), srv.URL, "k")
+	if result.Err == nil {
+		t.Fatal("拿不到模型列表时探活应报错（说明网络有问题），而不是假装成功")
+	}
+	if !strings.Contains(result.Err.Message, "模型列表") {
+		t.Errorf("错误信息应说明是模型列表的问题，得到: %s", result.Err.Message)
+	}
+}
+
+// TestAdapterFlushOnReadError 是实测踩坑后补的回归测试。
+//
+// 真实事故：上游发完内容后连接没有立刻关闭（SSE 长连接的正常形态），
+// 读操作阻塞到空闲看门狗超时才返回错误，而服务层当时写成
+// `if err != nil { return err }` 直接跳过了 Flush，
+// 结果 finish 事件和整条用量统计一起丢失——客户端看到"回答完了但没有 token 数"。
+//
+// 这里锁定两条规则：
+//  1. 上游给过完成信号 → 读出错也要 flush，finish 必须补上
+//  2. 上游什么都没给就断 → 不能补，否则截断会被粉饰成正常结束
+func TestAdapterFlushOnReadError(t *testing.T) {
+	// 情况一：收到了 finish_reason 和 usage，属于"上游已完成"
+	completed := newOpenAIStreamAdapter()
+	completed.ParseLine(`{"choices":[{"index":0,"delta":{"content":"hi"}}]}`)
+	completed.ParseLine(`{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2}}`)
+
+	if !completed.SawCompletion() {
+		t.Fatal("收到 finish_reason 和 usage 后应判定为上游已完成")
+	}
+	events := completed.Flush()
+	if len(events) != 1 || events[0].Type != "finish" {
+		t.Fatalf("应补出一个 finish 事件，得到 %+v", events)
+	}
+	if events[0].TotalUsage == nil || events[0].TotalUsage.InputTokens != 10 {
+		t.Errorf("finish 事件应带上用量，得到 %+v", events[0].TotalUsage)
+	}
+
+	// 情况二：只收到内容就断了，属于截断
+	truncated := newOpenAIStreamAdapter()
+	truncated.ParseLine(`{"choices":[{"index":0,"delta":{"content":"half"}}]}`)
+	if truncated.SawCompletion() {
+		t.Error("只收到内容、没有任何完成信号时不该判定为已完成——那会把截断粉饰成正常结束")
+	}
+
+	// [DONE] 本身也算完成信号
+	doneOnly := newOpenAIStreamAdapter()
+	doneOnly.ParseLine("[DONE]")
+	if !doneOnly.SawCompletion() {
+		t.Error("[DONE] 是明确的完成信号，应当被认作已完成")
 	}
 }

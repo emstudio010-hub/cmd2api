@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import GroupFormModal from '@/components/groups/GroupFormModal.vue'
+import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import DataTable from '@/components/ui/DataTable.vue'
@@ -14,6 +15,7 @@ import { toMessage } from '@/api/client'
 import type { Group } from '@/api/types'
 import { useToastStore } from '@/stores/toast'
 import { formatDateTime, formatNumber } from '@/utils/format'
+import { platformMeta } from '@/utils/platforms'
 
 const toast = useToastStore()
 
@@ -78,7 +80,8 @@ async function confirmDelete(): Promise<void> {
     <div class="flex flex-wrap items-center justify-between gap-2.5">
       <p class="text-2xs text-subtle">
         分组把上游账号和下游密钥绑定在一起：密钥只能使用同组内的账号。
-        大多数部署只需要一个默认分组。
+        分组在创建时选定平台，之后只能装同平台的账号、也不能改平台。
+        大多数部署每个平台只需要一个默认分组。
       </p>
       <div class="flex items-center gap-2">
         <Button variant="secondary" size="sm" :loading="loading" @click="load">
@@ -101,9 +104,10 @@ async function confirmDelete(): Promise<void> {
       <Button variant="ghost" size="xs" class="ml-auto" @click="load">重试</Button>
     </p>
 
-    <DataTable :columns="8" :loading="loading" :empty="items.length === 0" min-width="1000px">
+    <DataTable :columns="9" :loading="loading" :empty="items.length === 0" min-width="1100px">
       <template #head>
         <th class="th">分组</th>
+        <th class="th">平台</th>
         <th class="th">描述</th>
         <th class="th text-right">倍率</th>
         <th class="th">状态</th>
@@ -130,6 +134,12 @@ async function confirmDelete(): Promise<void> {
         <tr v-for="group in items" :key="group.id">
           <td class="td max-w-[14rem]">
             <span class="truncate font-medium text-fg">{{ group.name }}</span>
+          </td>
+          <td class="td">
+            <!-- 平台色调与账号列表保持一致：Command Code 主色、OpenCode 信息色 -->
+            <Badge :tone="platformMeta(group.platform).tone" dot>
+              {{ platformMeta(group.platform).label }}
+            </Badge>
           </td>
           <td class="td max-w-[22rem]">
             <span class="block truncate text-muted">{{ group.description || '—' }}</span>

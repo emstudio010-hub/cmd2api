@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 
+import AccountModePicker from '@/components/ui/AccountModePicker.vue'
 import Button from '@/components/ui/Button.vue'
 import Checkbox from '@/components/ui/Checkbox.vue'
 import Field from '@/components/ui/Field.vue'
 import Icon from '@/components/ui/Icon.vue'
 import Input from '@/components/ui/Input.vue'
 import Modal from '@/components/ui/Modal.vue'
+import PlatformPicker from '@/components/ui/PlatformPicker.vue'
 import Textarea from '@/components/ui/Textarea.vue'
 import { accountsApi } from '@/api/endpoints'
 import { toMessage } from '@/api/client'
-import type { BatchImportResult, Group } from '@/api/types'
+import type { BatchImportResult, Group, UpstreamPlatform } from '@/api/types'
 import { useToastStore } from '@/stores/toast'
+import { PLATFORMS, accountModeMeta, isValidKey, platformMeta } from '@/utils/platforms'
 
 const props = defineProps<{
   open: boolean
@@ -25,6 +29,11 @@ const emit = defineEmits<{
 
 const toast = useToastStore()
 
+/** 整批共用一个平台。默认 Command Code，与历史行为一致。 */
+const platform = ref<UpstreamPlatform>('commandcode')
+/** 以下两个字段只有 OpenCode 用得到。 */
+const accountMode = ref('')
+const baseUrl = ref('')
 const raw = ref('')
 const concurrency = ref('3')
 const priority = ref('50')
@@ -32,6 +41,20 @@ const groupIds = ref<number[]>([])
 const submitting = ref(false)
 const serverError = ref('')
 const result = ref<BatchImportResult | null>(null)
+
+const meta = computed(() => platformMeta(platform.value))
+const usesMode = computed(() => meta.value.usesMode)
+/** 当前模式留空 base_url 时会落到的地址，用作占位与提示。 */
+const defaultBaseUrl = computed(() => accountModeMeta(accountMode.value).defaultBaseUrl)
+const modeError = computed(() =>
+  usesMode.value && !accountMode.value ? '请选择计费模式' : '',
+)
+
+/** 只列同平台的分组：跨平台的组合后端会直接 400。 */
+const platformGroups = computed(() =>
+  props.groups.filter((group) => group.platform === platform.value),
+)
+const hiddenGroupCount = computed(() => props.groups.length - platformGroups.value.length)
 
 interface ParsedLine {
   line: number
@@ -46,7 +69,8 @@ interface ParsedLine {
  * 逗号后为空则整行当作密钥。
  *
  * 前端先解析一遍是为了让操作员在提交前就看到「哪一行会被丢掉」，
- * 而不是提交完再对着一串错误猜。
+ * 而不是提交完再对着一串错误猜。格式校验跟着所选平台走：
+ * Command Code 要求 user_ 前缀，OpenCode 不做前缀校验。
  */
 const parsed = computed<ParsedLine[]>(() => {
   const out: ParsedLine[] = []
@@ -65,7 +89,7 @@ const parsed = computed<ParsedLine[]>(() => {
         key = candidateKey
       }
     }
-    out.push({ line: index + 1, name, key, valid: key.startsWith('user_') })
+    out.push({ line: index + 1, name, key, valid: isValidKey(platform.value, key) })
   })
   return out
 })
@@ -76,7 +100,9 @@ const invalidCount = computed(() => parsed.value.length - validCount.value)
 /** 预览最多渲染 50 行，粘贴几千行时页面不该卡住。 */
 const previewLines = computed(() => parsed.value.slice(0, 50))
 
-const canSubmit = computed(() => validCount.value > 0 && !submitting.value)
+const canSubmit = computed(
+  () => validCount.value > 0 && !submitting.value && !modeError.value,
+)
 
 function maskKey(key: string): string {
   if (key.length <= 14) return key
@@ -87,6 +113,9 @@ watch(
   () => props.open,
   (open) => {
     if (!open) return
+    platform.value = 'commandcode'
+    accountMode.value = ''
+    baseUrl.value = ''
     raw.value = ''
     concurrency.value = '3'
     priority.value = '50'
@@ -96,12 +125,35 @@ watch(
   },
 )
 
+/**
+ * 切换平台。OpenCode 专属字段和已选分组在换平台后都不再适用，直接清空——
+ * 留着就会拼出一个后端必然拒绝的跨平台组合。
+ */
+function onPlatformChange(value: string): void {
+  const next = PLATFORMS.find((item) => item.value === value)
+  if (!next || next.value === platform.value) return
+  platform.value = next.value
+  accountMode.value = ''
+  baseUrl.value = ''
+  groupIds.value = []
+}
+
 function toggleGroup(id: number, checked: boolean): void {
   if (checked) {
     if (!groupIds.value.includes(id)) groupIds.value = [...groupIds.value, id]
   } else {
     groupIds.value = groupIds.value.filter((item) => item !== id)
   }
+}
+
+/**
+ * 只提交同平台的分组。分组列表没拉到时（props.groups 为空）不做过滤，
+ * 否则会把已勾选的分组悄悄丢掉。
+ */
+function selectedGroupIds(): number[] {
+  if (props.groups.length === 0) return groupIds.value
+  const allowed = new Set(platformGroups.value.map((group) => group.id))
+  return groupIds.value.filter((id) => allowed.has(id))
 }
 
 function toNumber(value: string, fallback: number): number {
@@ -116,9 +168,13 @@ async function submit(): Promise<void> {
   try {
     const response = await accountsApi.batchImport({
       keys: raw.value,
+      platform: platform.value,
+      // Command Code 没有这两个字段，显式传空串。
+      account_mode: usesMode.value ? accountMode.value : '',
+      base_url: usesMode.value ? baseUrl.value.trim() : '',
       concurrency: toNumber(concurrency.value, 3),
       priority: toNumber(priority.value, 50),
-      group_ids: groupIds.value,
+      group_ids: selectedGroupIds(),
     })
     result.value = response
     if (response.failed === 0) {
@@ -145,7 +201,7 @@ function close(): void {
   <Modal
     :open="open"
     title="批量导入账号"
-    subtitle="每行一条，支持「密钥」或「名称,密钥」两种写法"
+    :subtitle="`整批账号共用同一个平台：先选供应商，再粘贴该平台的密钥（${meta.label}）`"
     size="lg"
     @update:open="emit('update:open', $event)"
   >
@@ -157,6 +213,36 @@ function close(): void {
         <Icon name="alertCircle" :size="13" class="mt-px" />
         <span>{{ serverError }}</span>
       </p>
+
+      <!-- 平台决定密钥校验规则和可绑定的分组，所以放在最前面 -->
+      <Field
+        label="上游平台"
+        required
+        hint="整批共用；不同平台的密钥不能混在一批里导入"
+      >
+        <PlatformPicker :model-value="platform" @update:model-value="onPlatformChange" />
+      </Field>
+
+      <!-- OpenCode 专属：计费模式必填，上游地址留空则由后端按模式回填 -->
+      <template v-if="usesMode">
+        <Field
+          label="计费模式"
+          required
+          :error="modeError"
+          hint="决定计费口径与默认上游地址"
+        >
+          <AccountModePicker v-model="accountMode" :invalid="Boolean(modeError)" />
+        </Field>
+
+        <Field label="上游地址" :hint="`留空使用默认地址 ${defaultBaseUrl}`">
+          <Input
+            v-model="baseUrl"
+            :mono="true"
+            :placeholder="defaultBaseUrl"
+            autocomplete="off"
+          />
+        </Field>
+      </template>
 
       <!-- 导入结果。保留在弹窗里而不是直接关掉：操作员需要照着失败行改。 -->
       <div
@@ -200,10 +286,16 @@ function close(): void {
       >
         <Textarea
           v-model="raw"
-          :rows="8"
+          :rows="7"
           mono
-          placeholder="user_xxxxxxxxxxxxxxxx"
+          :placeholder="meta.keyPlaceholder"
         />
+        <p
+          class="mt-1.5 text-2xs"
+          :class="meta.keyPrefix ? 'text-warning' : 'text-subtle'"
+        >
+          {{ meta.keyHint }}
+        </p>
       </Field>
 
       <div class="flex flex-wrap items-center gap-3 text-2xs">
@@ -211,7 +303,7 @@ function close(): void {
         <span class="tnum text-fg">{{ parsed.length }} 行</span>
         <span class="tnum text-success">格式正确 {{ validCount }}</span>
         <span v-if="invalidCount > 0" class="tnum text-danger">
-          {{ invalidCount }} 行缺少 user_ 前缀
+          {{ invalidCount }} 行缺少 {{ meta.keyPrefix }} 前缀
         </span>
       </div>
 
@@ -265,23 +357,36 @@ function close(): void {
 
       <Field label="统一分组" hint="选中格式错误的行会被后端逐条跳过并列在失败列表里">
         <div
-          v-if="groups.length === 0"
-          class="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-2xs text-warning"
+          v-if="platformGroups.length === 0"
+          class="space-y-1.5 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-2xs text-warning"
         >
-          还没有任何分组，导入的账号不会绑定到任何分组。
+          <p>
+            还没有 {{ meta.label }} 平台的分组，本次导入的账号不会绑定到任何分组，
+            从而不会被任何下游密钥使用。
+          </p>
+          <RouterLink
+            :to="{ name: 'groups' }"
+            class="inline-flex items-center gap-1 font-medium text-accent hover:underline"
+            @click="close"
+          >
+            去创建 {{ meta.label }} 分组
+            <Icon name="external" :size="11" />
+          </RouterLink>
         </div>
-        <div
-          v-else
-          class="scroll-thin max-h-32 space-y-2 overflow-y-auto rounded-md border border-line bg-raised/40 p-2.5"
-        >
-          <Checkbox
-            v-for="group in groups"
-            :key="group.id"
-            :model-value="groupIds.includes(group.id)"
-            :label="group.name"
-            :description="`${group.account_count} 个账号`"
-            @update:model-value="toggleGroup(group.id, $event)"
-          />
+        <div v-else class="rounded-md border border-line bg-raised/40 p-2.5">
+          <div class="scroll-thin max-h-32 space-y-2 overflow-y-auto">
+            <Checkbox
+              v-for="group in platformGroups"
+              :key="group.id"
+              :model-value="groupIds.includes(group.id)"
+              :label="group.name"
+              :description="`${group.account_count} 个账号`"
+              @update:model-value="toggleGroup(group.id, $event)"
+            />
+          </div>
+          <p v-if="hiddenGroupCount > 0" class="mt-1.5 text-2xs text-subtle">
+            另有 {{ hiddenGroupCount }} 个其它平台的分组未列出。
+          </p>
         </div>
       </Field>
     </div>

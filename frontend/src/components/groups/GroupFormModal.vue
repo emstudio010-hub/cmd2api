@@ -6,12 +6,14 @@ import Field from '@/components/ui/Field.vue'
 import Icon from '@/components/ui/Icon.vue'
 import Input from '@/components/ui/Input.vue'
 import Modal from '@/components/ui/Modal.vue'
+import PlatformPicker from '@/components/ui/PlatformPicker.vue'
 import Select from '@/components/ui/Select.vue'
 import Textarea from '@/components/ui/Textarea.vue'
 import { groupsApi } from '@/api/endpoints'
 import { toMessage } from '@/api/client'
-import type { Group, GroupPayload } from '@/api/types'
+import type { Group, GroupPayload, UpstreamPlatform } from '@/api/types'
 import { useToastStore } from '@/stores/toast'
+import { PLATFORMS } from '@/utils/platforms'
 
 const props = defineProps<{
   open: boolean
@@ -28,6 +30,8 @@ const toast = useToastStore()
 
 const isEdit = computed(() => props.group !== null)
 
+/** 分组所属平台。新建时为空串（必须显式选）；编辑时是后端锁定好的既有值。 */
+const platform = ref<UpstreamPlatform | ''>('')
 const name = ref('')
 const description = ref('')
 const multiplier = ref('1')
@@ -42,6 +46,8 @@ const statusOptions = [
 
 const errors = computed(() => {
   const out: Record<string, string> = {}
+  // 平台决定这个分组能装哪些账号，所以也是必选项。
+  if (!platform.value) out.platform = '请选择分组所属平台'
   if (!name.value.trim()) out.name = '请输入分组名称'
   const parsed = Number(multiplier.value)
   if (!Number.isFinite(parsed) || parsed <= 0) out.multiplier = '倍率必须大于 0'
@@ -50,10 +56,19 @@ const errors = computed(() => {
 
 const valid = computed(() => Object.keys(errors.value).length === 0)
 
+function onPlatformChange(value: string): void {
+  const next = PLATFORMS.find((item) => item.value === value)
+  if (!next || next.value === platform.value) return
+  platform.value = next.value
+}
+
 watch(
   () => [props.open, props.group] as const,
   () => {
     if (!props.open) return
+    // 编辑时平台不可改。platform 是后端后加的字段，历史数据里可能是空串，
+    // 那按老平台的语义当作 Command Code，免得表单卡在「请选择分组所属平台」上。
+    platform.value = props.group ? props.group.platform || 'commandcode' : ''
     name.value = props.group?.name ?? ''
     description.value = props.group?.description ?? ''
     multiplier.value = String(props.group?.rate_multiplier ?? 1)
@@ -69,12 +84,17 @@ function close(): void {
 
 async function submit(): Promise<void> {
   if (!valid.value || submitting.value) return
+  const selectedPlatform = platform.value
+  // valid 已经保证平台非空，这里只是把类型收窄回字面量联合。
+  if (!selectedPlatform) return
   submitting.value = true
   serverError.value = ''
   try {
     const payload: GroupPayload = {
       name: name.value.trim(),
       description: description.value,
+      // 平台不可修改，更新时原样回传，避免后端把它当成变更。
+      platform: selectedPlatform,
       rate_multiplier: Number(multiplier.value),
       status: status.value,
     }
@@ -111,6 +131,25 @@ async function submit(): Promise<void> {
         <Icon name="alertCircle" :size="13" class="mt-px" />
         <span>{{ serverError }}</span>
       </p>
+
+      <!-- 平台放在最前面：它决定了这个分组能装哪些账号 -->
+      <Field
+        label="所属平台"
+        :required="!isEdit"
+        :error="errors.platform"
+        :hint="
+          isEdit
+            ? '平台创建后不可更改'
+            : '平台创建后不可更改，分组只能装同平台的账号'
+        "
+      >
+        <PlatformPicker
+          :model-value="platform"
+          :disabled="isEdit"
+          :invalid="Boolean(errors.platform)"
+          @update:model-value="onPlatformChange"
+        />
+      </Field>
 
       <Field label="分组名称" required :error="errors.name">
         <Input v-model="name" placeholder="例如：默认分组 / 内部测试" maxlength="100" />

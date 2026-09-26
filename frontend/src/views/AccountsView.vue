@@ -19,6 +19,7 @@ import { toMessage } from '@/api/client'
 import type { Account, Group } from '@/api/types'
 import { useToastStore } from '@/stores/toast'
 import { formatDateTime, formatExpiry, formatNumber, formatRelative, isExpired } from '@/utils/format'
+import { platformMeta } from '@/utils/platforms'
 
 const toast = useToastStore()
 
@@ -33,6 +34,7 @@ const pageSize = ref(20)
 const keyword = ref('')
 const status = ref('')
 const groupFilter = ref('')
+const platformFilter = ref('')
 
 const formOpen = ref(false)
 const editing = ref<Account | null>(null)
@@ -49,10 +51,20 @@ const statusOptions = [
   { label: '异常', value: 'error' },
 ]
 
+// 与后端 ?platform= 一一对应，空串表示不筛选。
+const platformOptions = [
+  { label: 'Command Code', value: 'commandcode' },
+  { label: 'OpenCode', value: 'opencode' },
+]
+
 const groupOptions = computed(() => groups.value.map((g) => ({ label: g.name, value: String(g.id) })))
 
 const filtersActive = computed(
-  () => Boolean(keyword.value.trim()) || Boolean(status.value) || Boolean(groupFilter.value),
+  () =>
+    Boolean(keyword.value.trim()) ||
+    Boolean(status.value) ||
+    Boolean(groupFilter.value) ||
+    Boolean(platformFilter.value),
 )
 
 const groupNameById = computed(() => {
@@ -64,7 +76,7 @@ const groupNameById = computed(() => {
 const emptyDescription = computed(() =>
   filtersActive.value
     ? '当前筛选条件下没有账号，试试放宽关键词或清空筛选。'
-    : 'cmd2api 需要至少一个 Command Code 账号（user_ 开头的密钥）才能向上游发起请求。可以逐个添加，也可以把多把密钥一次性粘进批量导入。',
+    : 'cmd2api 需要至少一个上游账号才能发起请求：Command Code 账号用 user_ 开头的密钥，OpenCode 账号则要选好计费模式。可以逐个添加，也可以把多把密钥一次性粘进批量导入。',
 )
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
@@ -89,6 +101,7 @@ async function load(): Promise<void> {
       status: status.value || undefined,
       keyword: keyword.value.trim() || undefined,
       group_id: groupFilter.value ? Number(groupFilter.value) : undefined,
+      platform: platformFilter.value || undefined,
     })
     items.value = response.items
     total.value = response.total
@@ -114,7 +127,7 @@ watch(keyword, () => {
   }, 300)
 })
 
-watch([status, groupFilter], () => {
+watch([status, groupFilter, platformFilter], () => {
   page.value = 1
   void load()
 })
@@ -145,6 +158,7 @@ function clearFilters(): void {
   keyword.value = ''
   status.value = ''
   groupFilter.value = ''
+  platformFilter.value = ''
   page.value = 1
   void load()
 }
@@ -223,6 +237,15 @@ function healthOf(account: Account): { tone: 'success' | 'danger' | 'neutral'; t
 
       <div class="w-32">
         <Select v-model="status" size="sm" :options="statusOptions" placeholder="全部状态" />
+      </div>
+
+      <div class="w-40">
+        <Select
+          v-model="platformFilter"
+          size="sm"
+          :options="platformOptions"
+          placeholder="全部平台"
+        />
       </div>
 
       <div class="w-40">
@@ -312,6 +335,10 @@ function healthOf(account: Account): { tone: 'success' | 'danger' | 'neutral'; t
             <div class="flex flex-col gap-0.5">
               <div class="flex items-center gap-1.5">
                 <span class="truncate font-medium text-fg">{{ account.name }}</span>
+                <!-- 平台用色调区分：Command Code 是主色，OpenCode 是信息色 -->
+                <Badge :tone="platformMeta(account.platform).tone" dot>
+                  {{ platformMeta(account.platform).label }}
+                </Badge>
                 <Badge v-if="!account.schedulable" tone="warning">不调度</Badge>
               </div>
               <div class="flex items-center gap-1.5 text-2xs">

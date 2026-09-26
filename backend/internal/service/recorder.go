@@ -156,8 +156,96 @@ var priceTable = map[string]ModelPrice{
 	"google/gemini-3.1-flash-lite": {Input: 0.1, Output: 0.4},
 }
 
+// openCodePriceTable 是 OpenCode 上游的模型定价。
+//
+// 必须单独一张表：OpenCode 的模型命名和 Command Code 完全是两套体系——
+// 同一个模型在两边叫 minimax-m3 和 MiniMaxAI/MiniMax-M3，
+// 一张表覆盖不了，混在一起会让人以为"匹配上了"其实是错的。
+//
+// ⚠️ 这些是按**模型家族**给的估算单价，不是 OpenCode 官方报价。
+// 用途仅是让用量统计在 OpenCode 场景下也有可比的量纲。
+// `-free` 结尾的模型本就不收费，不在此表内（查不到即记 0，正好正确）。
+var openCodePriceTable = map[string]ModelPrice{
+	// Anthropic 系（Zen 档）
+	"claude-opus-5-5":   {Input: 15, Output: 75},
+	"claude-opus-5":     {Input: 15, Output: 75},
+	"claude-opus-4-8":   {Input: 15, Output: 75},
+	"claude-opus-4-7":   {Input: 15, Output: 75},
+	"claude-opus-4-6":   {Input: 15, Output: 75},
+	"claude-opus-4-5":   {Input: 15, Output: 75},
+	"claude-sonnet-5":   {Input: 3, Output: 15},
+	"claude-sonnet-4-6": {Input: 3, Output: 15},
+	"claude-sonnet-4-5": {Input: 3, Output: 15},
+	"claude-haiku-4-5":  {Input: 1, Output: 5},
+	"claude-fable-5":    {Input: 3, Output: 15},
+	"claude-fable-5-1":  {Input: 3, Output: 15},
+
+	// OpenAI 系
+	"gpt-6-luna":    {Input: 2, Output: 12},
+	"gpt-6-sol":     {Input: 2, Output: 12},
+	"gpt-6-astra":   {Input: 2, Output: 12},
+	"gpt-5.6-luna":  {Input: 1.5, Output: 10},
+	"gpt-5.6-sol":   {Input: 1.5, Output: 10},
+	"gpt-5.6-terra": {Input: 1.5, Output: 10},
+	"gpt-5.5":       {Input: 1.25, Output: 10},
+	"gpt-5.4":       {Input: 1.25, Output: 10},
+	"gpt-5.4-mini":  {Input: 0.25, Output: 2},
+	"gpt-5.3-codex": {Input: 1.25, Output: 10},
+	"gpt-5.1-codex": {Input: 1.25, Output: 10},
+	"gpt-5":         {Input: 1.25, Output: 10},
+
+	// Google 系
+	"gemini-3.8-flash":      {Input: 0.3, Output: 2.5},
+	"gemini-3.6-flash":      {Input: 0.3, Output: 2.5},
+	"gemini-3.5-flash":      {Input: 0.3, Output: 2.5},
+	"gemini-3.5-flash-lite": {Input: 0.1, Output: 0.4},
+	"gemini-3.1-pro":        {Input: 1.25, Output: 10},
+
+	// xAI
+	"grok-4.7": {Input: 3, Output: 15},
+	"grok-4.6": {Input: 3, Output: 15},
+	"grok-4.5": {Input: 3, Output: 15},
+
+	// DeepSeek
+	"deepseek-v4-pro":     {Input: 0.6, Output: 2.4},
+	"deepseek-v4-flash":   {Input: 0.15, Output: 0.6},
+	"deepseek-v4.1-flash": {Input: 0.15, Output: 0.6},
+
+	// Moonshot / Kimi
+	"kimi-k3":        {Input: 0.6, Output: 2.5},
+	"kimi-k2.7-code": {Input: 0.6, Output: 2.5},
+	"kimi-k2.6":      {Input: 0.6, Output: 2.5},
+
+	// 智谱 GLM
+	"glm-5.3":       {Input: 0.6, Output: 2.2},
+	"glm-5.3-flash": {Input: 0.1, Output: 0.4},
+	"glm-5.2":       {Input: 0.6, Output: 2.2},
+	"glm-5.1":       {Input: 0.6, Output: 2.2},
+
+	// MiniMax
+	"minimax-m3":   {Input: 0.3, Output: 1.2},
+	"minimax-m2.7": {Input: 0.3, Output: 1.2},
+	"minimax-m2.5": {Input: 0.3, Output: 1.2},
+
+	// 阿里 Qwen
+	"qwen3.8-max":   {Input: 1.2, Output: 6},
+	"qwen3.8-flash": {Input: 0.1, Output: 0.4},
+	"qwen3.7-max":   {Input: 1.2, Output: 6},
+	"qwen3.7-plus":  {Input: 0.4, Output: 1.2},
+	"qwen3.6-plus":  {Input: 0.4, Output: 1.2},
+
+	// 小米 MiMo
+	"mimo-v2.6-pro":   {Input: 0.4, Output: 1.5},
+	"mimo-v2.6-flash": {Input: 0.1, Output: 0.4},
+	"mimo-v2.5-pro":   {Input: 0.4, Output: 1.5},
+	"mimo-v2.5":       {Input: 0.2, Output: 0.8},
+}
+
 func priceFor(model string) (ModelPrice, bool) {
-	p, ok := priceTable[model]
+	if p, ok := priceTable[model]; ok {
+		return p, true
+	}
+	p, ok := openCodePriceTable[model]
 	return p, ok
 }
 

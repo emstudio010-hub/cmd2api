@@ -14,10 +14,11 @@ import (
 	"cmd2api/internal/scheduler"
 )
 
-// probeModel 是探活用的模型。
+// commandCodeProbeModel 是探活 Command Code 账号用的模型。
 //
-// 刻意选便宜且快的：探活每个账号每轮都要跑一次，用贵的模型纯属浪费额度。
-const probeModel = "deepseek/deepseek-v4-flash"
+// 只在 Command Code 这一路写死：它的模型命名（vendor/model）稳定，
+// 且这个模型便宜快。OpenCode 那边绝对不能照搬——见 openCodeProbeModel 的说明。
+const commandCodeProbeModel = "deepseek/deepseek-v4-flash"
 
 // probePrompt 尽量短，把探活的 token 消耗压到最低。
 const probePrompt = "ok"
@@ -70,7 +71,7 @@ func (c *Client) probeCommandCode(ctx context.Context, apiKey string) ProbeResul
 
 	one := 1
 	req := &normalizedRequest{
-		Model:     probeModel,
+		Model:     commandCodeProbeModel,
 		Messages:  []map[string]any{{"role": "user", "content": probePrompt}},
 		MaxTokens: &one,
 	}

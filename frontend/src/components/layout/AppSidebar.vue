@@ -51,11 +51,15 @@ function close(): void {
   >
     <!-- 品牌区 -->
     <div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-line px-3.5">
-      <span
-        class="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-accent-fg shadow-panel"
-      >
-        <Icon name="zap" :size="15" />
-      </span>
+      <!-- 站点图标本身是满画布的不透明方图，所以直接做圆角裁切，
+           不再套彩色底框——底框会被图完全盖住，只是多余的一层。 -->
+      <img
+        src="/logo.png"
+        alt=""
+        width="28"
+        height="28"
+        class="h-7 w-7 shrink-0 rounded-md object-cover shadow-panel"
+      />
       <div class="min-w-0 flex-1">
         <p class="truncate text-[13px] font-semibold leading-4 text-fg">cmd2api</p>
         <p class="truncate text-2xs leading-4 text-subtle">AI 网关管理后台</p>

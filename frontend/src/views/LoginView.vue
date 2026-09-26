@@ -55,11 +55,13 @@ async function submit(): Promise<void> {
 
     <div class="w-full max-w-[22rem]">
       <div class="mb-6 flex flex-col items-center text-center">
-        <span
-          class="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-accent-fg shadow-panel"
-        >
-          <Icon name="zap" :size="22" />
-        </span>
+        <img
+          src="/logo.png"
+          alt=""
+          width="44"
+          height="44"
+          class="mb-3 h-11 w-11 rounded-xl object-cover shadow-panel"
+        />
         <h1 class="text-lg font-semibold text-fg">cmd2api</h1>
         <p class="mt-1 text-2xs text-subtle">
           AI 网关管理后台 · 将 Command Code 账号转为 OpenAI / Anthropic 兼容接口

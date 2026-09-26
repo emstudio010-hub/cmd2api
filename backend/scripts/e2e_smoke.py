@@ -150,6 +150,42 @@ status, a3 = call("POST", "/api/accounts",
 check(u"opencode go 模式 base_url 不同",
       a3.get("base_url") == "https://opencode.ai/zen/go/v1", a3.get("base_url"))
 
+# ---- 余额 ----
+print(u"\n[余额]")
+# 「平台不支持」和「还没刷过」是两种不同的状态，界面上的文案也不同，
+# 所以这里分开断言，而不是笼统地看有没有 balance 字段。
+check(u"commandcode 账号标记为支持查余额",
+      a1.get("balance", {}).get("supported") is True, a1.get("balance"))
+check(u"没刷过余额时 remaining 为空",
+      a1.get("balance", {}).get("remaining") is None, a1.get("balance"))
+check(u"没刷过余额时 fetched_at 为空",
+      a1.get("balance", {}).get("fetched_at") is None, a1.get("balance"))
+check(u"没刷过余额时带 supported 字段而不是缺字段",
+      "balance" in a1 and "supported" in a1["balance"], sorted(a1.get("balance", {}).keys()))
+
+# opencode 是「不支持」而不是「失败」——混成一种状态会让管理员去查一个
+# 并不存在的故障。
+check(u"opencode 账号标记为不支持查余额",
+      a2.get("balance", {}).get("supported") is False, a2.get("balance"))
+
+status, body = call("POST", "/api/accounts/%d/balance" % a2["id"], token=token)
+check(u"对 opencode 账号刷余额返回明确的不支持而不是报错",
+      status == 400 and u"不支持" in json.dumps(body, ensure_ascii=False), (status, body))
+
+# 拿一把假密钥去真上游刷余额。这里**不断言成功**：跑测试的机器可能没有外网，
+# 上游也一定会拒绝这把假密钥。要断言的是「失败也是干净的失败」——
+# 200 + ok:false，而不是 5xx，也不是把整次刷新做成一个异常。
+status, body = call("POST", "/api/accounts/%d/balance" % a1["id"], token=token)
+check(u"余额刷新失败时返回 200 + ok:false 而不是 5xx",
+      status == 200 and body.get("ok") is False, (status, body))
+
+status, body = call("GET", "/api/accounts/%d" % a1["id"], token=token)
+check(u"刷新失败后账号仍可读", status == 200, (status, body))
+# 失败绝不能推进 fetched_at：那个字段的含义是「界面上的数字是什么时候取的」，
+# 推进它会让一个旧数字看起来像刚刚取的。
+check(u"刷新失败不推进 fetched_at",
+      body.get("balance", {}).get("fetched_at") is None, body.get("balance"))
+
 # 平台错配
 status, body = call("POST", "/api/accounts",
                     {"name": uniq("Mismatch"), "platform": "opencode", "account_mode": "zen",

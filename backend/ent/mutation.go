@@ -1409,6 +1409,22 @@ type AccountMutation struct {
 	rate_limited_at         *time.Time
 	rate_limit_reset_at     *time.Time
 	overload_until          *time.Time
+	balance_fetched_at      *time.Time
+	balance_error           *string
+	balance_remaining       *float64
+	addbalance_remaining    *float64
+	balance_plan_id         *string
+	balance_period_end      *time.Time
+	balance_5h_used         *float64
+	addbalance_5h_used      *float64
+	balance_5h_cap          *float64
+	addbalance_5h_cap       *float64
+	balance_5h_reset_at     *time.Time
+	balance_weekly_used     *float64
+	addbalance_weekly_used  *float64
+	balance_weekly_cap      *float64
+	addbalance_weekly_cap   *float64
+	balance_weekly_reset_at *time.Time
 	consecutive_failures    *int
 	addconsecutive_failures *int
 	last_health_check_at    *time.Time
@@ -2410,6 +2426,650 @@ func (m *AccountMutation) ResetOverloadUntil() {
 	delete(m.clearedFields, account.FieldOverloadUntil)
 }
 
+// SetBalanceFetchedAt sets the "balance_fetched_at" field.
+func (m *AccountMutation) SetBalanceFetchedAt(t time.Time) {
+	m.balance_fetched_at = &t
+}
+
+// BalanceFetchedAt returns the value of the "balance_fetched_at" field in the mutation.
+func (m *AccountMutation) BalanceFetchedAt() (r time.Time, exists bool) {
+	v := m.balance_fetched_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalanceFetchedAt returns the old "balance_fetched_at" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldBalanceFetchedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalanceFetchedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalanceFetchedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalanceFetchedAt: %w", err)
+	}
+	return oldValue.BalanceFetchedAt, nil
+}
+
+// ClearBalanceFetchedAt clears the value of the "balance_fetched_at" field.
+func (m *AccountMutation) ClearBalanceFetchedAt() {
+	m.balance_fetched_at = nil
+	m.clearedFields[account.FieldBalanceFetchedAt] = struct{}{}
+}
+
+// BalanceFetchedAtCleared returns if the "balance_fetched_at" field was cleared in this mutation.
+func (m *AccountMutation) BalanceFetchedAtCleared() bool {
+	_, ok := m.clearedFields[account.FieldBalanceFetchedAt]
+	return ok
+}
+
+// ResetBalanceFetchedAt resets all changes to the "balance_fetched_at" field.
+func (m *AccountMutation) ResetBalanceFetchedAt() {
+	m.balance_fetched_at = nil
+	delete(m.clearedFields, account.FieldBalanceFetchedAt)
+}
+
+// SetBalanceError sets the "balance_error" field.
+func (m *AccountMutation) SetBalanceError(s string) {
+	m.balance_error = &s
+}
+
+// BalanceError returns the value of the "balance_error" field in the mutation.
+func (m *AccountMutation) BalanceError() (r string, exists bool) {
+	v := m.balance_error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalanceError returns the old "balance_error" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldBalanceError(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalanceError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalanceError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalanceError: %w", err)
+	}
+	return oldValue.BalanceError, nil
+}
+
+// ClearBalanceError clears the value of the "balance_error" field.
+func (m *AccountMutation) ClearBalanceError() {
+	m.balance_error = nil
+	m.clearedFields[account.FieldBalanceError] = struct{}{}
+}
+
+// BalanceErrorCleared returns if the "balance_error" field was cleared in this mutation.
+func (m *AccountMutation) BalanceErrorCleared() bool {
+	_, ok := m.clearedFields[account.FieldBalanceError]
+	return ok
+}
+
+// ResetBalanceError resets all changes to the "balance_error" field.
+func (m *AccountMutation) ResetBalanceError() {
+	m.balance_error = nil
+	delete(m.clearedFields, account.FieldBalanceError)
+}
+
+// SetBalanceRemaining sets the "balance_remaining" field.
+func (m *AccountMutation) SetBalanceRemaining(f float64) {
+	m.balance_remaining = &f
+	m.addbalance_remaining = nil
+}
+
+// BalanceRemaining returns the value of the "balance_remaining" field in the mutation.
+func (m *AccountMutation) BalanceRemaining() (r float64, exists bool) {
+	v := m.balance_remaining
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalanceRemaining returns the old "balance_remaining" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldBalanceRemaining(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalanceRemaining is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalanceRemaining requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalanceRemaining: %w", err)
+	}
+	return oldValue.BalanceRemaining, nil
+}
+
+// AddBalanceRemaining adds f to the "balance_remaining" field.
+func (m *AccountMutation) AddBalanceRemaining(f float64) {
+	if m.addbalance_remaining != nil {
+		*m.addbalance_remaining += f
+	} else {
+		m.addbalance_remaining = &f
+	}
+}
+
+// AddedBalanceRemaining returns the value that was added to the "balance_remaining" field in this mutation.
+func (m *AccountMutation) AddedBalanceRemaining() (r float64, exists bool) {
+	v := m.addbalance_remaining
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearBalanceRemaining clears the value of the "balance_remaining" field.
+func (m *AccountMutation) ClearBalanceRemaining() {
+	m.balance_remaining = nil
+	m.addbalance_remaining = nil
+	m.clearedFields[account.FieldBalanceRemaining] = struct{}{}
+}
+
+// BalanceRemainingCleared returns if the "balance_remaining" field was cleared in this mutation.
+func (m *AccountMutation) BalanceRemainingCleared() bool {
+	_, ok := m.clearedFields[account.FieldBalanceRemaining]
+	return ok
+}
+
+// ResetBalanceRemaining resets all changes to the "balance_remaining" field.
+func (m *AccountMutation) ResetBalanceRemaining() {
+	m.balance_remaining = nil
+	m.addbalance_remaining = nil
+	delete(m.clearedFields, account.FieldBalanceRemaining)
+}
+
+// SetBalancePlanID sets the "balance_plan_id" field.
+func (m *AccountMutation) SetBalancePlanID(s string) {
+	m.balance_plan_id = &s
+}
+
+// BalancePlanID returns the value of the "balance_plan_id" field in the mutation.
+func (m *AccountMutation) BalancePlanID() (r string, exists bool) {
+	v := m.balance_plan_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalancePlanID returns the old "balance_plan_id" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldBalancePlanID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalancePlanID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalancePlanID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalancePlanID: %w", err)
+	}
+	return oldValue.BalancePlanID, nil
+}
+
+// ClearBalancePlanID clears the value of the "balance_plan_id" field.
+func (m *AccountMutation) ClearBalancePlanID() {
+	m.balance_plan_id = nil
+	m.clearedFields[account.FieldBalancePlanID] = struct{}{}
+}
+
+// BalancePlanIDCleared returns if the "balance_plan_id" field was cleared in this mutation.
+func (m *AccountMutation) BalancePlanIDCleared() bool {
+	_, ok := m.clearedFields[account.FieldBalancePlanID]
+	return ok
+}
+
+// ResetBalancePlanID resets all changes to the "balance_plan_id" field.
+func (m *AccountMutation) ResetBalancePlanID() {
+	m.balance_plan_id = nil
+	delete(m.clearedFields, account.FieldBalancePlanID)
+}
+
+// SetBalancePeriodEnd sets the "balance_period_end" field.
+func (m *AccountMutation) SetBalancePeriodEnd(t time.Time) {
+	m.balance_period_end = &t
+}
+
+// BalancePeriodEnd returns the value of the "balance_period_end" field in the mutation.
+func (m *AccountMutation) BalancePeriodEnd() (r time.Time, exists bool) {
+	v := m.balance_period_end
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalancePeriodEnd returns the old "balance_period_end" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldBalancePeriodEnd(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalancePeriodEnd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalancePeriodEnd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalancePeriodEnd: %w", err)
+	}
+	return oldValue.BalancePeriodEnd, nil
+}
+
+// ClearBalancePeriodEnd clears the value of the "balance_period_end" field.
+func (m *AccountMutation) ClearBalancePeriodEnd() {
+	m.balance_period_end = nil
+	m.clearedFields[account.FieldBalancePeriodEnd] = struct{}{}
+}
+
+// BalancePeriodEndCleared returns if the "balance_period_end" field was cleared in this mutation.
+func (m *AccountMutation) BalancePeriodEndCleared() bool {
+	_, ok := m.clearedFields[account.FieldBalancePeriodEnd]
+	return ok
+}
+
+// ResetBalancePeriodEnd resets all changes to the "balance_period_end" field.
+func (m *AccountMutation) ResetBalancePeriodEnd() {
+	m.balance_period_end = nil
+	delete(m.clearedFields, account.FieldBalancePeriodEnd)
+}
+
+// SetBalance5hUsed sets the "balance_5h_used" field.
+func (m *AccountMutation) SetBalance5hUsed(f float64) {
+	m.balance_5h_used = &f
+	m.addbalance_5h_used = nil
+}
+
+// Balance5hUsed returns the value of the "balance_5h_used" field in the mutation.
+func (m *AccountMutation) Balance5hUsed() (r float64, exists bool) {
+	v := m.balance_5h_used
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalance5hUsed returns the old "balance_5h_used" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldBalance5hUsed(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalance5hUsed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalance5hUsed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalance5hUsed: %w", err)
+	}
+	return oldValue.Balance5hUsed, nil
+}
+
+// AddBalance5hUsed adds f to the "balance_5h_used" field.
+func (m *AccountMutation) AddBalance5hUsed(f float64) {
+	if m.addbalance_5h_used != nil {
+		*m.addbalance_5h_used += f
+	} else {
+		m.addbalance_5h_used = &f
+	}
+}
+
+// AddedBalance5hUsed returns the value that was added to the "balance_5h_used" field in this mutation.
+func (m *AccountMutation) AddedBalance5hUsed() (r float64, exists bool) {
+	v := m.addbalance_5h_used
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearBalance5hUsed clears the value of the "balance_5h_used" field.
+func (m *AccountMutation) ClearBalance5hUsed() {
+	m.balance_5h_used = nil
+	m.addbalance_5h_used = nil
+	m.clearedFields[account.FieldBalance5hUsed] = struct{}{}
+}
+
+// Balance5hUsedCleared returns if the "balance_5h_used" field was cleared in this mutation.
+func (m *AccountMutation) Balance5hUsedCleared() bool {
+	_, ok := m.clearedFields[account.FieldBalance5hUsed]
+	return ok
+}
+
+// ResetBalance5hUsed resets all changes to the "balance_5h_used" field.
+func (m *AccountMutation) ResetBalance5hUsed() {
+	m.balance_5h_used = nil
+	m.addbalance_5h_used = nil
+	delete(m.clearedFields, account.FieldBalance5hUsed)
+}
+
+// SetBalance5hCap sets the "balance_5h_cap" field.
+func (m *AccountMutation) SetBalance5hCap(f float64) {
+	m.balance_5h_cap = &f
+	m.addbalance_5h_cap = nil
+}
+
+// Balance5hCap returns the value of the "balance_5h_cap" field in the mutation.
+func (m *AccountMutation) Balance5hCap() (r float64, exists bool) {
+	v := m.balance_5h_cap
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalance5hCap returns the old "balance_5h_cap" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldBalance5hCap(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalance5hCap is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalance5hCap requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalance5hCap: %w", err)
+	}
+	return oldValue.Balance5hCap, nil
+}
+
+// AddBalance5hCap adds f to the "balance_5h_cap" field.
+func (m *AccountMutation) AddBalance5hCap(f float64) {
+	if m.addbalance_5h_cap != nil {
+		*m.addbalance_5h_cap += f
+	} else {
+		m.addbalance_5h_cap = &f
+	}
+}
+
+// AddedBalance5hCap returns the value that was added to the "balance_5h_cap" field in this mutation.
+func (m *AccountMutation) AddedBalance5hCap() (r float64, exists bool) {
+	v := m.addbalance_5h_cap
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearBalance5hCap clears the value of the "balance_5h_cap" field.
+func (m *AccountMutation) ClearBalance5hCap() {
+	m.balance_5h_cap = nil
+	m.addbalance_5h_cap = nil
+	m.clearedFields[account.FieldBalance5hCap] = struct{}{}
+}
+
+// Balance5hCapCleared returns if the "balance_5h_cap" field was cleared in this mutation.
+func (m *AccountMutation) Balance5hCapCleared() bool {
+	_, ok := m.clearedFields[account.FieldBalance5hCap]
+	return ok
+}
+
+// ResetBalance5hCap resets all changes to the "balance_5h_cap" field.
+func (m *AccountMutation) ResetBalance5hCap() {
+	m.balance_5h_cap = nil
+	m.addbalance_5h_cap = nil
+	delete(m.clearedFields, account.FieldBalance5hCap)
+}
+
+// SetBalance5hResetAt sets the "balance_5h_reset_at" field.
+func (m *AccountMutation) SetBalance5hResetAt(t time.Time) {
+	m.balance_5h_reset_at = &t
+}
+
+// Balance5hResetAt returns the value of the "balance_5h_reset_at" field in the mutation.
+func (m *AccountMutation) Balance5hResetAt() (r time.Time, exists bool) {
+	v := m.balance_5h_reset_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalance5hResetAt returns the old "balance_5h_reset_at" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldBalance5hResetAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalance5hResetAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalance5hResetAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalance5hResetAt: %w", err)
+	}
+	return oldValue.Balance5hResetAt, nil
+}
+
+// ClearBalance5hResetAt clears the value of the "balance_5h_reset_at" field.
+func (m *AccountMutation) ClearBalance5hResetAt() {
+	m.balance_5h_reset_at = nil
+	m.clearedFields[account.FieldBalance5hResetAt] = struct{}{}
+}
+
+// Balance5hResetAtCleared returns if the "balance_5h_reset_at" field was cleared in this mutation.
+func (m *AccountMutation) Balance5hResetAtCleared() bool {
+	_, ok := m.clearedFields[account.FieldBalance5hResetAt]
+	return ok
+}
+
+// ResetBalance5hResetAt resets all changes to the "balance_5h_reset_at" field.
+func (m *AccountMutation) ResetBalance5hResetAt() {
+	m.balance_5h_reset_at = nil
+	delete(m.clearedFields, account.FieldBalance5hResetAt)
+}
+
+// SetBalanceWeeklyUsed sets the "balance_weekly_used" field.
+func (m *AccountMutation) SetBalanceWeeklyUsed(f float64) {
+	m.balance_weekly_used = &f
+	m.addbalance_weekly_used = nil
+}
+
+// BalanceWeeklyUsed returns the value of the "balance_weekly_used" field in the mutation.
+func (m *AccountMutation) BalanceWeeklyUsed() (r float64, exists bool) {
+	v := m.balance_weekly_used
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalanceWeeklyUsed returns the old "balance_weekly_used" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldBalanceWeeklyUsed(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalanceWeeklyUsed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalanceWeeklyUsed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalanceWeeklyUsed: %w", err)
+	}
+	return oldValue.BalanceWeeklyUsed, nil
+}
+
+// AddBalanceWeeklyUsed adds f to the "balance_weekly_used" field.
+func (m *AccountMutation) AddBalanceWeeklyUsed(f float64) {
+	if m.addbalance_weekly_used != nil {
+		*m.addbalance_weekly_used += f
+	} else {
+		m.addbalance_weekly_used = &f
+	}
+}
+
+// AddedBalanceWeeklyUsed returns the value that was added to the "balance_weekly_used" field in this mutation.
+func (m *AccountMutation) AddedBalanceWeeklyUsed() (r float64, exists bool) {
+	v := m.addbalance_weekly_used
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearBalanceWeeklyUsed clears the value of the "balance_weekly_used" field.
+func (m *AccountMutation) ClearBalanceWeeklyUsed() {
+	m.balance_weekly_used = nil
+	m.addbalance_weekly_used = nil
+	m.clearedFields[account.FieldBalanceWeeklyUsed] = struct{}{}
+}
+
+// BalanceWeeklyUsedCleared returns if the "balance_weekly_used" field was cleared in this mutation.
+func (m *AccountMutation) BalanceWeeklyUsedCleared() bool {
+	_, ok := m.clearedFields[account.FieldBalanceWeeklyUsed]
+	return ok
+}
+
+// ResetBalanceWeeklyUsed resets all changes to the "balance_weekly_used" field.
+func (m *AccountMutation) ResetBalanceWeeklyUsed() {
+	m.balance_weekly_used = nil
+	m.addbalance_weekly_used = nil
+	delete(m.clearedFields, account.FieldBalanceWeeklyUsed)
+}
+
+// SetBalanceWeeklyCap sets the "balance_weekly_cap" field.
+func (m *AccountMutation) SetBalanceWeeklyCap(f float64) {
+	m.balance_weekly_cap = &f
+	m.addbalance_weekly_cap = nil
+}
+
+// BalanceWeeklyCap returns the value of the "balance_weekly_cap" field in the mutation.
+func (m *AccountMutation) BalanceWeeklyCap() (r float64, exists bool) {
+	v := m.balance_weekly_cap
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalanceWeeklyCap returns the old "balance_weekly_cap" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldBalanceWeeklyCap(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalanceWeeklyCap is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalanceWeeklyCap requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalanceWeeklyCap: %w", err)
+	}
+	return oldValue.BalanceWeeklyCap, nil
+}
+
+// AddBalanceWeeklyCap adds f to the "balance_weekly_cap" field.
+func (m *AccountMutation) AddBalanceWeeklyCap(f float64) {
+	if m.addbalance_weekly_cap != nil {
+		*m.addbalance_weekly_cap += f
+	} else {
+		m.addbalance_weekly_cap = &f
+	}
+}
+
+// AddedBalanceWeeklyCap returns the value that was added to the "balance_weekly_cap" field in this mutation.
+func (m *AccountMutation) AddedBalanceWeeklyCap() (r float64, exists bool) {
+	v := m.addbalance_weekly_cap
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearBalanceWeeklyCap clears the value of the "balance_weekly_cap" field.
+func (m *AccountMutation) ClearBalanceWeeklyCap() {
+	m.balance_weekly_cap = nil
+	m.addbalance_weekly_cap = nil
+	m.clearedFields[account.FieldBalanceWeeklyCap] = struct{}{}
+}
+
+// BalanceWeeklyCapCleared returns if the "balance_weekly_cap" field was cleared in this mutation.
+func (m *AccountMutation) BalanceWeeklyCapCleared() bool {
+	_, ok := m.clearedFields[account.FieldBalanceWeeklyCap]
+	return ok
+}
+
+// ResetBalanceWeeklyCap resets all changes to the "balance_weekly_cap" field.
+func (m *AccountMutation) ResetBalanceWeeklyCap() {
+	m.balance_weekly_cap = nil
+	m.addbalance_weekly_cap = nil
+	delete(m.clearedFields, account.FieldBalanceWeeklyCap)
+}
+
+// SetBalanceWeeklyResetAt sets the "balance_weekly_reset_at" field.
+func (m *AccountMutation) SetBalanceWeeklyResetAt(t time.Time) {
+	m.balance_weekly_reset_at = &t
+}
+
+// BalanceWeeklyResetAt returns the value of the "balance_weekly_reset_at" field in the mutation.
+func (m *AccountMutation) BalanceWeeklyResetAt() (r time.Time, exists bool) {
+	v := m.balance_weekly_reset_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalanceWeeklyResetAt returns the old "balance_weekly_reset_at" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldBalanceWeeklyResetAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalanceWeeklyResetAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalanceWeeklyResetAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalanceWeeklyResetAt: %w", err)
+	}
+	return oldValue.BalanceWeeklyResetAt, nil
+}
+
+// ClearBalanceWeeklyResetAt clears the value of the "balance_weekly_reset_at" field.
+func (m *AccountMutation) ClearBalanceWeeklyResetAt() {
+	m.balance_weekly_reset_at = nil
+	m.clearedFields[account.FieldBalanceWeeklyResetAt] = struct{}{}
+}
+
+// BalanceWeeklyResetAtCleared returns if the "balance_weekly_reset_at" field was cleared in this mutation.
+func (m *AccountMutation) BalanceWeeklyResetAtCleared() bool {
+	_, ok := m.clearedFields[account.FieldBalanceWeeklyResetAt]
+	return ok
+}
+
+// ResetBalanceWeeklyResetAt resets all changes to the "balance_weekly_reset_at" field.
+func (m *AccountMutation) ResetBalanceWeeklyResetAt() {
+	m.balance_weekly_reset_at = nil
+	delete(m.clearedFields, account.FieldBalanceWeeklyResetAt)
+}
+
 // SetConsecutiveFailures sets the "consecutive_failures" field.
 func (m *AccountMutation) SetConsecutiveFailures(i int) {
 	m.consecutive_failures = &i
@@ -2812,7 +3472,7 @@ func (m *AccountMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 36)
 	if m.created_at != nil {
 		fields = append(fields, account.FieldCreatedAt)
 	}
@@ -2872,6 +3532,39 @@ func (m *AccountMutation) Fields() []string {
 	}
 	if m.overload_until != nil {
 		fields = append(fields, account.FieldOverloadUntil)
+	}
+	if m.balance_fetched_at != nil {
+		fields = append(fields, account.FieldBalanceFetchedAt)
+	}
+	if m.balance_error != nil {
+		fields = append(fields, account.FieldBalanceError)
+	}
+	if m.balance_remaining != nil {
+		fields = append(fields, account.FieldBalanceRemaining)
+	}
+	if m.balance_plan_id != nil {
+		fields = append(fields, account.FieldBalancePlanID)
+	}
+	if m.balance_period_end != nil {
+		fields = append(fields, account.FieldBalancePeriodEnd)
+	}
+	if m.balance_5h_used != nil {
+		fields = append(fields, account.FieldBalance5hUsed)
+	}
+	if m.balance_5h_cap != nil {
+		fields = append(fields, account.FieldBalance5hCap)
+	}
+	if m.balance_5h_reset_at != nil {
+		fields = append(fields, account.FieldBalance5hResetAt)
+	}
+	if m.balance_weekly_used != nil {
+		fields = append(fields, account.FieldBalanceWeeklyUsed)
+	}
+	if m.balance_weekly_cap != nil {
+		fields = append(fields, account.FieldBalanceWeeklyCap)
+	}
+	if m.balance_weekly_reset_at != nil {
+		fields = append(fields, account.FieldBalanceWeeklyResetAt)
 	}
 	if m.consecutive_failures != nil {
 		fields = append(fields, account.FieldConsecutiveFailures)
@@ -2936,6 +3629,28 @@ func (m *AccountMutation) Field(name string) (ent.Value, bool) {
 		return m.RateLimitResetAt()
 	case account.FieldOverloadUntil:
 		return m.OverloadUntil()
+	case account.FieldBalanceFetchedAt:
+		return m.BalanceFetchedAt()
+	case account.FieldBalanceError:
+		return m.BalanceError()
+	case account.FieldBalanceRemaining:
+		return m.BalanceRemaining()
+	case account.FieldBalancePlanID:
+		return m.BalancePlanID()
+	case account.FieldBalancePeriodEnd:
+		return m.BalancePeriodEnd()
+	case account.FieldBalance5hUsed:
+		return m.Balance5hUsed()
+	case account.FieldBalance5hCap:
+		return m.Balance5hCap()
+	case account.FieldBalance5hResetAt:
+		return m.Balance5hResetAt()
+	case account.FieldBalanceWeeklyUsed:
+		return m.BalanceWeeklyUsed()
+	case account.FieldBalanceWeeklyCap:
+		return m.BalanceWeeklyCap()
+	case account.FieldBalanceWeeklyResetAt:
+		return m.BalanceWeeklyResetAt()
 	case account.FieldConsecutiveFailures:
 		return m.ConsecutiveFailures()
 	case account.FieldLastHealthCheckAt:
@@ -2995,6 +3710,28 @@ func (m *AccountMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldRateLimitResetAt(ctx)
 	case account.FieldOverloadUntil:
 		return m.OldOverloadUntil(ctx)
+	case account.FieldBalanceFetchedAt:
+		return m.OldBalanceFetchedAt(ctx)
+	case account.FieldBalanceError:
+		return m.OldBalanceError(ctx)
+	case account.FieldBalanceRemaining:
+		return m.OldBalanceRemaining(ctx)
+	case account.FieldBalancePlanID:
+		return m.OldBalancePlanID(ctx)
+	case account.FieldBalancePeriodEnd:
+		return m.OldBalancePeriodEnd(ctx)
+	case account.FieldBalance5hUsed:
+		return m.OldBalance5hUsed(ctx)
+	case account.FieldBalance5hCap:
+		return m.OldBalance5hCap(ctx)
+	case account.FieldBalance5hResetAt:
+		return m.OldBalance5hResetAt(ctx)
+	case account.FieldBalanceWeeklyUsed:
+		return m.OldBalanceWeeklyUsed(ctx)
+	case account.FieldBalanceWeeklyCap:
+		return m.OldBalanceWeeklyCap(ctx)
+	case account.FieldBalanceWeeklyResetAt:
+		return m.OldBalanceWeeklyResetAt(ctx)
 	case account.FieldConsecutiveFailures:
 		return m.OldConsecutiveFailures(ctx)
 	case account.FieldLastHealthCheckAt:
@@ -3154,6 +3891,83 @@ func (m *AccountMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetOverloadUntil(v)
 		return nil
+	case account.FieldBalanceFetchedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalanceFetchedAt(v)
+		return nil
+	case account.FieldBalanceError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalanceError(v)
+		return nil
+	case account.FieldBalanceRemaining:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalanceRemaining(v)
+		return nil
+	case account.FieldBalancePlanID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalancePlanID(v)
+		return nil
+	case account.FieldBalancePeriodEnd:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalancePeriodEnd(v)
+		return nil
+	case account.FieldBalance5hUsed:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalance5hUsed(v)
+		return nil
+	case account.FieldBalance5hCap:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalance5hCap(v)
+		return nil
+	case account.FieldBalance5hResetAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalance5hResetAt(v)
+		return nil
+	case account.FieldBalanceWeeklyUsed:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalanceWeeklyUsed(v)
+		return nil
+	case account.FieldBalanceWeeklyCap:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalanceWeeklyCap(v)
+		return nil
+	case account.FieldBalanceWeeklyResetAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalanceWeeklyResetAt(v)
+		return nil
 	case account.FieldConsecutiveFailures:
 		v, ok := value.(int)
 		if !ok {
@@ -3206,6 +4020,21 @@ func (m *AccountMutation) AddedFields() []string {
 	if m.addrate_multiplier != nil {
 		fields = append(fields, account.FieldRateMultiplier)
 	}
+	if m.addbalance_remaining != nil {
+		fields = append(fields, account.FieldBalanceRemaining)
+	}
+	if m.addbalance_5h_used != nil {
+		fields = append(fields, account.FieldBalance5hUsed)
+	}
+	if m.addbalance_5h_cap != nil {
+		fields = append(fields, account.FieldBalance5hCap)
+	}
+	if m.addbalance_weekly_used != nil {
+		fields = append(fields, account.FieldBalanceWeeklyUsed)
+	}
+	if m.addbalance_weekly_cap != nil {
+		fields = append(fields, account.FieldBalanceWeeklyCap)
+	}
 	if m.addconsecutive_failures != nil {
 		fields = append(fields, account.FieldConsecutiveFailures)
 	}
@@ -3226,6 +4055,16 @@ func (m *AccountMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedPriority()
 	case account.FieldRateMultiplier:
 		return m.AddedRateMultiplier()
+	case account.FieldBalanceRemaining:
+		return m.AddedBalanceRemaining()
+	case account.FieldBalance5hUsed:
+		return m.AddedBalance5hUsed()
+	case account.FieldBalance5hCap:
+		return m.AddedBalance5hCap()
+	case account.FieldBalanceWeeklyUsed:
+		return m.AddedBalanceWeeklyUsed()
+	case account.FieldBalanceWeeklyCap:
+		return m.AddedBalanceWeeklyCap()
 	case account.FieldConsecutiveFailures:
 		return m.AddedConsecutiveFailures()
 	case account.FieldLatencyMs:
@@ -3259,6 +4098,41 @@ func (m *AccountMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddRateMultiplier(v)
+		return nil
+	case account.FieldBalanceRemaining:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBalanceRemaining(v)
+		return nil
+	case account.FieldBalance5hUsed:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBalance5hUsed(v)
+		return nil
+	case account.FieldBalance5hCap:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBalance5hCap(v)
+		return nil
+	case account.FieldBalanceWeeklyUsed:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBalanceWeeklyUsed(v)
+		return nil
+	case account.FieldBalanceWeeklyCap:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBalanceWeeklyCap(v)
 		return nil
 	case account.FieldConsecutiveFailures:
 		v, ok := value.(int)
@@ -3306,6 +4180,39 @@ func (m *AccountMutation) ClearedFields() []string {
 	if m.FieldCleared(account.FieldOverloadUntil) {
 		fields = append(fields, account.FieldOverloadUntil)
 	}
+	if m.FieldCleared(account.FieldBalanceFetchedAt) {
+		fields = append(fields, account.FieldBalanceFetchedAt)
+	}
+	if m.FieldCleared(account.FieldBalanceError) {
+		fields = append(fields, account.FieldBalanceError)
+	}
+	if m.FieldCleared(account.FieldBalanceRemaining) {
+		fields = append(fields, account.FieldBalanceRemaining)
+	}
+	if m.FieldCleared(account.FieldBalancePlanID) {
+		fields = append(fields, account.FieldBalancePlanID)
+	}
+	if m.FieldCleared(account.FieldBalancePeriodEnd) {
+		fields = append(fields, account.FieldBalancePeriodEnd)
+	}
+	if m.FieldCleared(account.FieldBalance5hUsed) {
+		fields = append(fields, account.FieldBalance5hUsed)
+	}
+	if m.FieldCleared(account.FieldBalance5hCap) {
+		fields = append(fields, account.FieldBalance5hCap)
+	}
+	if m.FieldCleared(account.FieldBalance5hResetAt) {
+		fields = append(fields, account.FieldBalance5hResetAt)
+	}
+	if m.FieldCleared(account.FieldBalanceWeeklyUsed) {
+		fields = append(fields, account.FieldBalanceWeeklyUsed)
+	}
+	if m.FieldCleared(account.FieldBalanceWeeklyCap) {
+		fields = append(fields, account.FieldBalanceWeeklyCap)
+	}
+	if m.FieldCleared(account.FieldBalanceWeeklyResetAt) {
+		fields = append(fields, account.FieldBalanceWeeklyResetAt)
+	}
 	if m.FieldCleared(account.FieldLastHealthCheckAt) {
 		fields = append(fields, account.FieldLastHealthCheckAt)
 	}
@@ -3352,6 +4259,39 @@ func (m *AccountMutation) ClearField(name string) error {
 		return nil
 	case account.FieldOverloadUntil:
 		m.ClearOverloadUntil()
+		return nil
+	case account.FieldBalanceFetchedAt:
+		m.ClearBalanceFetchedAt()
+		return nil
+	case account.FieldBalanceError:
+		m.ClearBalanceError()
+		return nil
+	case account.FieldBalanceRemaining:
+		m.ClearBalanceRemaining()
+		return nil
+	case account.FieldBalancePlanID:
+		m.ClearBalancePlanID()
+		return nil
+	case account.FieldBalancePeriodEnd:
+		m.ClearBalancePeriodEnd()
+		return nil
+	case account.FieldBalance5hUsed:
+		m.ClearBalance5hUsed()
+		return nil
+	case account.FieldBalance5hCap:
+		m.ClearBalance5hCap()
+		return nil
+	case account.FieldBalance5hResetAt:
+		m.ClearBalance5hResetAt()
+		return nil
+	case account.FieldBalanceWeeklyUsed:
+		m.ClearBalanceWeeklyUsed()
+		return nil
+	case account.FieldBalanceWeeklyCap:
+		m.ClearBalanceWeeklyCap()
+		return nil
+	case account.FieldBalanceWeeklyResetAt:
+		m.ClearBalanceWeeklyResetAt()
 		return nil
 	case account.FieldLastHealthCheckAt:
 		m.ClearLastHealthCheckAt()
@@ -3429,6 +4369,39 @@ func (m *AccountMutation) ResetField(name string) error {
 		return nil
 	case account.FieldOverloadUntil:
 		m.ResetOverloadUntil()
+		return nil
+	case account.FieldBalanceFetchedAt:
+		m.ResetBalanceFetchedAt()
+		return nil
+	case account.FieldBalanceError:
+		m.ResetBalanceError()
+		return nil
+	case account.FieldBalanceRemaining:
+		m.ResetBalanceRemaining()
+		return nil
+	case account.FieldBalancePlanID:
+		m.ResetBalancePlanID()
+		return nil
+	case account.FieldBalancePeriodEnd:
+		m.ResetBalancePeriodEnd()
+		return nil
+	case account.FieldBalance5hUsed:
+		m.ResetBalance5hUsed()
+		return nil
+	case account.FieldBalance5hCap:
+		m.ResetBalance5hCap()
+		return nil
+	case account.FieldBalance5hResetAt:
+		m.ResetBalance5hResetAt()
+		return nil
+	case account.FieldBalanceWeeklyUsed:
+		m.ResetBalanceWeeklyUsed()
+		return nil
+	case account.FieldBalanceWeeklyCap:
+		m.ResetBalanceWeeklyCap()
+		return nil
+	case account.FieldBalanceWeeklyResetAt:
+		m.ResetBalanceWeeklyResetAt()
 		return nil
 	case account.FieldConsecutiveFailures:
 		m.ResetConsecutiveFailures()

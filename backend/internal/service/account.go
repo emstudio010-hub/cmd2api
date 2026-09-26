@@ -458,7 +458,141 @@ func (s *AccountService) Check(ctx context.Context, id int64) (*relay.ProbeResul
 
 	result := s.relayClient.Probe(ctx, target)
 	s.applyProbeResult(ctx, acc, result)
+
+	// 顺手刷一次余额。两个请求打的是同一个上游，探活都已经发了，
+	// 顺带把余额带回来等于零额外代价——列表页就不用自己去打上游了。
+	s.applyBalanceResult(ctx, acc, s.relayClient.FetchBalance(ctx, target))
+
 	return &result, nil
+}
+
+// RefreshBalance 只刷新余额，不做探活。
+//
+// 跟探活分开是有意的：探活会真的发一次生成请求、消耗 token，
+// 只想看余额的人不该被迫烧一次额度。
+func (s *AccountService) RefreshBalance(ctx context.Context, id int64) (*relay.BalanceResult, error) {
+	acc, err := s.getActiveAccount(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	target, err := s.sched.TargetByAccountID(ctx, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "api_key") {
+			return nil, errors.New("该账号的密钥无法解密，请重新录入")
+		}
+		return nil, err
+	}
+
+	result := s.relayClient.FetchBalance(ctx, target)
+	s.applyBalanceResult(ctx, acc, result)
+	return &result, nil
+}
+
+// applyBalanceResult 把余额结果写回账号。
+//
+// 失败时刻意**不更新** balance_fetched_at：那个字段的意思是「界面上的数字
+// 是什么时候取的」。失败时把它推到当前时间，会让一个三天前的余额看起来像
+// 刚刚取的。保持原值，界面就能显示「$8.69（3 天前）」外加一条刷新失败——
+// 这是实话，而「刚刚取的 $8.69」不是。
+func (s *AccountService) applyBalanceResult(ctx context.Context, acc *ent.Account, result relay.BalanceResult) {
+	// 平台不支持查余额：什么都不写。写了 fetched_at 会让界面显示
+	// 「刚刚刷新」却没有任何数据，看着像刷新失败。
+	if !result.Supported {
+		return
+	}
+
+	builder := s.client.Account.UpdateOneID(acc.ID)
+
+	if result.Err != nil {
+		builder = builder.SetBalanceError(truncateBalanceError(result.Err.Error()))
+		if _, err := builder.Save(ctx); err != nil {
+			s.logger.Warn("回写余额失败原因出错", "err", err, "account_id", acc.ID)
+		}
+		return
+	}
+
+	b := result.Balance
+	builder = builder.
+		SetBalanceFetchedAt(time.Now()).
+		ClearBalanceError().
+		SetBalanceRemaining(b.Remaining)
+
+	if b.PlanID != "" {
+		builder = builder.SetBalancePlanID(b.PlanID)
+	} else {
+		builder = builder.ClearBalancePlanID()
+	}
+	if b.PeriodEnd != nil {
+		builder = builder.SetBalancePeriodEnd(*b.PeriodEnd)
+	} else {
+		builder = builder.ClearBalancePeriodEnd()
+	}
+
+	builder = applyWindow(builder, b.FiveHour,
+		func(u *ent.AccountUpdateOne, used, capacity float64) *ent.AccountUpdateOne {
+			return u.SetBalance5hUsed(used).SetBalance5hCap(capacity)
+		},
+		func(u *ent.AccountUpdateOne) *ent.AccountUpdateOne {
+			return u.ClearBalance5hUsed().ClearBalance5hCap()
+		},
+		func(u *ent.AccountUpdateOne, t time.Time) *ent.AccountUpdateOne {
+			return u.SetBalance5hResetAt(t)
+		},
+		func(u *ent.AccountUpdateOne) *ent.AccountUpdateOne { return u.ClearBalance5hResetAt() },
+	)
+	builder = applyWindow(builder, b.Weekly,
+		func(u *ent.AccountUpdateOne, used, capacity float64) *ent.AccountUpdateOne {
+			return u.SetBalanceWeeklyUsed(used).SetBalanceWeeklyCap(capacity)
+		},
+		func(u *ent.AccountUpdateOne) *ent.AccountUpdateOne {
+			return u.ClearBalanceWeeklyUsed().ClearBalanceWeeklyCap()
+		},
+		func(u *ent.AccountUpdateOne, t time.Time) *ent.AccountUpdateOne {
+			return u.SetBalanceWeeklyResetAt(t)
+		},
+		func(u *ent.AccountUpdateOne) *ent.AccountUpdateOne { return u.ClearBalanceWeeklyResetAt() },
+	)
+
+	if _, err := builder.Save(ctx); err != nil {
+		s.logger.Warn("回写余额失败", "err", err, "account_id", acc.ID)
+	}
+}
+
+// applyWindow 按窗口是否存在，选择写入数值还是清空。
+//
+// 上游可能突然不再返回某个窗口（改了套餐、接口变了），这时必须把旧值清掉。
+// 留着上一次的用量会让界面一直显示一个早已过期的窗口，比不显示更糟。
+func applyWindow(
+	builder *ent.AccountUpdateOne,
+	window *relay.BalanceWindow,
+	setValues func(*ent.AccountUpdateOne, float64, float64) *ent.AccountUpdateOne,
+	clearValues func(*ent.AccountUpdateOne) *ent.AccountUpdateOne,
+	setReset func(*ent.AccountUpdateOne, time.Time) *ent.AccountUpdateOne,
+	clearReset func(*ent.AccountUpdateOne) *ent.AccountUpdateOne,
+) *ent.AccountUpdateOne {
+	if window == nil {
+		return clearReset(clearValues(builder))
+	}
+	builder = setValues(builder, window.Used, window.Cap)
+	if window.ResetAt != nil {
+		return setReset(builder, *window.ResetAt)
+	}
+	return clearReset(builder)
+}
+
+// truncateBalanceError 限制写进 error_message 类的字段长度。
+//
+// 这些字段要在表格里展示，上游偶尔会回一整页 HTML，原样存下来界面就废了。
+// 按 rune 截断而不是按字节——按字节切会把一个多字节字符切成两半，
+// 存进 Postgres 的 text 列时直接报编码错。
+func truncateBalanceError(msg string) string {
+	msg = strings.Join(strings.Fields(msg), " ")
+	const max = 300
+	runes := []rune(msg)
+	if len(runes) <= max {
+		return msg
+	}
+	return string(runes[:max]) + "…"
 }
 
 // applyProbeResult 把探活结果写回账号。
@@ -543,9 +677,15 @@ func (s *AccountService) checkAll(ctx context.Context) {
 
 		probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		result := s.relayClient.Probe(probeCtx, target)
+		// 余额另开一个上下文：探活那个可能已经把时间用光了，
+		// 拿一个到期的 deadline 去发请求会立刻超时，余额永远刷不出来。
+		balanceCtx, balanceCancel := context.WithTimeout(ctx, 20*time.Second)
+		balance := s.relayClient.FetchBalance(balanceCtx, target)
+		balanceCancel()
 		cancel()
 
 		s.applyProbeResult(ctx, acc, result)
+		s.applyBalanceResult(ctx, acc, balance)
 		if result.Err == nil {
 			okCount++
 		} else {

@@ -1,6 +1,7 @@
 import { del, get, post, put } from './client'
 import type {
   Account,
+  AccountBalanceRefreshResult,
   AccountCheckResult,
   AccountListResponse,
   AccountQuery,
@@ -74,6 +75,17 @@ export const accountsApi = {
   /** 真会向上游发一次极小请求（消耗几十个 token），所以要给足超时。 */
   check(id: number) {
     return post<AccountCheckResult>(`/accounts/${id}/check`, undefined, { timeout: 120_000 })
+  },
+  /**
+   * 只刷余额，不探活。
+   *
+   * 跟 check 分开是有意的：check 会真的发一次生成请求、消耗 token，
+   * 这个只打两个只读接口，所以可以做成随便点的按钮。
+   */
+  refreshBalance(id: number) {
+    return post<AccountBalanceRefreshResult>(`/accounts/${id}/balance`, undefined, {
+      timeout: 60_000,
+    })
   },
   batchImport(payload: BatchImportPayload) {
     return post<BatchImportResult>('/accounts/batch', payload)

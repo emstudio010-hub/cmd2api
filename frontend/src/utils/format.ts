@@ -33,6 +33,22 @@ export function formatCost(value: number | null | undefined): string {
   return numberFormatter.format(Math.round(value))
 }
 
+/**
+ * 带货币符号的美元金额：余额、额度这类地方用它。
+ *
+ * 跟 formatCost 分开：那个是「花了多少」，统计页里一串数字不带 $ 更清爽；
+ * 这个是「还剩多少」，没有 $ 会被误读成 token 数或次数。
+ */
+export function formatMoney(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—'
+  const abs = Math.abs(value)
+  if (abs === 0) return '$0'
+  // 小额额度（比如 5 小时窗口只用了两分钱）按 2 位小数会显示成 $0.02，
+  // 够用；再小就补到 4 位，免得看起来像「没花钱」。
+  if (abs < 0.01) return `$${value.toFixed(4)}`
+  return `$${value.toFixed(2)}`
+}
+
 /** 成功率：后端给的是 0~1 的小数。 */
 export function formatPercent(ratio: number | null | undefined, digits = 1): string {
   if (ratio === null || ratio === undefined || Number.isNaN(ratio)) return '—'

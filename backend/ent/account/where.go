@@ -145,6 +145,61 @@ func OverloadUntil(v time.Time) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldOverloadUntil, v))
 }
 
+// BalanceFetchedAt applies equality check predicate on the "balance_fetched_at" field. It's identical to BalanceFetchedAtEQ.
+func BalanceFetchedAt(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalanceFetchedAt, v))
+}
+
+// BalanceError applies equality check predicate on the "balance_error" field. It's identical to BalanceErrorEQ.
+func BalanceError(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalanceError, v))
+}
+
+// BalanceRemaining applies equality check predicate on the "balance_remaining" field. It's identical to BalanceRemainingEQ.
+func BalanceRemaining(v float64) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalanceRemaining, v))
+}
+
+// BalancePlanID applies equality check predicate on the "balance_plan_id" field. It's identical to BalancePlanIDEQ.
+func BalancePlanID(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalancePlanID, v))
+}
+
+// BalancePeriodEnd applies equality check predicate on the "balance_period_end" field. It's identical to BalancePeriodEndEQ.
+func BalancePeriodEnd(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalancePeriodEnd, v))
+}
+
+// Balance5hUsed applies equality check predicate on the "balance_5h_used" field. It's identical to Balance5hUsedEQ.
+func Balance5hUsed(v float64) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalance5hUsed, v))
+}
+
+// Balance5hCap applies equality check predicate on the "balance_5h_cap" field. It's identical to Balance5hCapEQ.
+func Balance5hCap(v float64) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalance5hCap, v))
+}
+
+// Balance5hResetAt applies equality check predicate on the "balance_5h_reset_at" field. It's identical to Balance5hResetAtEQ.
+func Balance5hResetAt(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalance5hResetAt, v))
+}
+
+// BalanceWeeklyUsed applies equality check predicate on the "balance_weekly_used" field. It's identical to BalanceWeeklyUsedEQ.
+func BalanceWeeklyUsed(v float64) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalanceWeeklyUsed, v))
+}
+
+// BalanceWeeklyCap applies equality check predicate on the "balance_weekly_cap" field. It's identical to BalanceWeeklyCapEQ.
+func BalanceWeeklyCap(v float64) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalanceWeeklyCap, v))
+}
+
+// BalanceWeeklyResetAt applies equality check predicate on the "balance_weekly_reset_at" field. It's identical to BalanceWeeklyResetAtEQ.
+func BalanceWeeklyResetAt(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalanceWeeklyResetAt, v))
+}
+
 // ConsecutiveFailures applies equality check predicate on the "consecutive_failures" field. It's identical to ConsecutiveFailuresEQ.
 func ConsecutiveFailures(v int) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldConsecutiveFailures, v))
@@ -1088,6 +1143,606 @@ func OverloadUntilIsNil() predicate.Account {
 // OverloadUntilNotNil applies the NotNil predicate on the "overload_until" field.
 func OverloadUntilNotNil() predicate.Account {
 	return predicate.Account(sql.FieldNotNull(FieldOverloadUntil))
+}
+
+// BalanceFetchedAtEQ applies the EQ predicate on the "balance_fetched_at" field.
+func BalanceFetchedAtEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalanceFetchedAt, v))
+}
+
+// BalanceFetchedAtNEQ applies the NEQ predicate on the "balance_fetched_at" field.
+func BalanceFetchedAtNEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldBalanceFetchedAt, v))
+}
+
+// BalanceFetchedAtIn applies the In predicate on the "balance_fetched_at" field.
+func BalanceFetchedAtIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldBalanceFetchedAt, vs...))
+}
+
+// BalanceFetchedAtNotIn applies the NotIn predicate on the "balance_fetched_at" field.
+func BalanceFetchedAtNotIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldBalanceFetchedAt, vs...))
+}
+
+// BalanceFetchedAtGT applies the GT predicate on the "balance_fetched_at" field.
+func BalanceFetchedAtGT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldBalanceFetchedAt, v))
+}
+
+// BalanceFetchedAtGTE applies the GTE predicate on the "balance_fetched_at" field.
+func BalanceFetchedAtGTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldBalanceFetchedAt, v))
+}
+
+// BalanceFetchedAtLT applies the LT predicate on the "balance_fetched_at" field.
+func BalanceFetchedAtLT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldBalanceFetchedAt, v))
+}
+
+// BalanceFetchedAtLTE applies the LTE predicate on the "balance_fetched_at" field.
+func BalanceFetchedAtLTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldBalanceFetchedAt, v))
+}
+
+// BalanceFetchedAtIsNil applies the IsNil predicate on the "balance_fetched_at" field.
+func BalanceFetchedAtIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldBalanceFetchedAt))
+}
+
+// BalanceFetchedAtNotNil applies the NotNil predicate on the "balance_fetched_at" field.
+func BalanceFetchedAtNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldBalanceFetchedAt))
+}
+
+// BalanceErrorEQ applies the EQ predicate on the "balance_error" field.
+func BalanceErrorEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalanceError, v))
+}
+
+// BalanceErrorNEQ applies the NEQ predicate on the "balance_error" field.
+func BalanceErrorNEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldBalanceError, v))
+}
+
+// BalanceErrorIn applies the In predicate on the "balance_error" field.
+func BalanceErrorIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldBalanceError, vs...))
+}
+
+// BalanceErrorNotIn applies the NotIn predicate on the "balance_error" field.
+func BalanceErrorNotIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldBalanceError, vs...))
+}
+
+// BalanceErrorGT applies the GT predicate on the "balance_error" field.
+func BalanceErrorGT(v string) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldBalanceError, v))
+}
+
+// BalanceErrorGTE applies the GTE predicate on the "balance_error" field.
+func BalanceErrorGTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldBalanceError, v))
+}
+
+// BalanceErrorLT applies the LT predicate on the "balance_error" field.
+func BalanceErrorLT(v string) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldBalanceError, v))
+}
+
+// BalanceErrorLTE applies the LTE predicate on the "balance_error" field.
+func BalanceErrorLTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldBalanceError, v))
+}
+
+// BalanceErrorContains applies the Contains predicate on the "balance_error" field.
+func BalanceErrorContains(v string) predicate.Account {
+	return predicate.Account(sql.FieldContains(FieldBalanceError, v))
+}
+
+// BalanceErrorHasPrefix applies the HasPrefix predicate on the "balance_error" field.
+func BalanceErrorHasPrefix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasPrefix(FieldBalanceError, v))
+}
+
+// BalanceErrorHasSuffix applies the HasSuffix predicate on the "balance_error" field.
+func BalanceErrorHasSuffix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasSuffix(FieldBalanceError, v))
+}
+
+// BalanceErrorIsNil applies the IsNil predicate on the "balance_error" field.
+func BalanceErrorIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldBalanceError))
+}
+
+// BalanceErrorNotNil applies the NotNil predicate on the "balance_error" field.
+func BalanceErrorNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldBalanceError))
+}
+
+// BalanceErrorEqualFold applies the EqualFold predicate on the "balance_error" field.
+func BalanceErrorEqualFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldEqualFold(FieldBalanceError, v))
+}
+
+// BalanceErrorContainsFold applies the ContainsFold predicate on the "balance_error" field.
+func BalanceErrorContainsFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldContainsFold(FieldBalanceError, v))
+}
+
+// BalanceRemainingEQ applies the EQ predicate on the "balance_remaining" field.
+func BalanceRemainingEQ(v float64) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalanceRemaining, v))
+}
+
+// BalanceRemainingNEQ applies the NEQ predicate on the "balance_remaining" field.
+func BalanceRemainingNEQ(v float64) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldBalanceRemaining, v))
+}
+
+// BalanceRemainingIn applies the In predicate on the "balance_remaining" field.
+func BalanceRemainingIn(vs ...float64) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldBalanceRemaining, vs...))
+}
+
+// BalanceRemainingNotIn applies the NotIn predicate on the "balance_remaining" field.
+func BalanceRemainingNotIn(vs ...float64) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldBalanceRemaining, vs...))
+}
+
+// BalanceRemainingGT applies the GT predicate on the "balance_remaining" field.
+func BalanceRemainingGT(v float64) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldBalanceRemaining, v))
+}
+
+// BalanceRemainingGTE applies the GTE predicate on the "balance_remaining" field.
+func BalanceRemainingGTE(v float64) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldBalanceRemaining, v))
+}
+
+// BalanceRemainingLT applies the LT predicate on the "balance_remaining" field.
+func BalanceRemainingLT(v float64) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldBalanceRemaining, v))
+}
+
+// BalanceRemainingLTE applies the LTE predicate on the "balance_remaining" field.
+func BalanceRemainingLTE(v float64) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldBalanceRemaining, v))
+}
+
+// BalanceRemainingIsNil applies the IsNil predicate on the "balance_remaining" field.
+func BalanceRemainingIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldBalanceRemaining))
+}
+
+// BalanceRemainingNotNil applies the NotNil predicate on the "balance_remaining" field.
+func BalanceRemainingNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldBalanceRemaining))
+}
+
+// BalancePlanIDEQ applies the EQ predicate on the "balance_plan_id" field.
+func BalancePlanIDEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalancePlanID, v))
+}
+
+// BalancePlanIDNEQ applies the NEQ predicate on the "balance_plan_id" field.
+func BalancePlanIDNEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldBalancePlanID, v))
+}
+
+// BalancePlanIDIn applies the In predicate on the "balance_plan_id" field.
+func BalancePlanIDIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldBalancePlanID, vs...))
+}
+
+// BalancePlanIDNotIn applies the NotIn predicate on the "balance_plan_id" field.
+func BalancePlanIDNotIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldBalancePlanID, vs...))
+}
+
+// BalancePlanIDGT applies the GT predicate on the "balance_plan_id" field.
+func BalancePlanIDGT(v string) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldBalancePlanID, v))
+}
+
+// BalancePlanIDGTE applies the GTE predicate on the "balance_plan_id" field.
+func BalancePlanIDGTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldBalancePlanID, v))
+}
+
+// BalancePlanIDLT applies the LT predicate on the "balance_plan_id" field.
+func BalancePlanIDLT(v string) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldBalancePlanID, v))
+}
+
+// BalancePlanIDLTE applies the LTE predicate on the "balance_plan_id" field.
+func BalancePlanIDLTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldBalancePlanID, v))
+}
+
+// BalancePlanIDContains applies the Contains predicate on the "balance_plan_id" field.
+func BalancePlanIDContains(v string) predicate.Account {
+	return predicate.Account(sql.FieldContains(FieldBalancePlanID, v))
+}
+
+// BalancePlanIDHasPrefix applies the HasPrefix predicate on the "balance_plan_id" field.
+func BalancePlanIDHasPrefix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasPrefix(FieldBalancePlanID, v))
+}
+
+// BalancePlanIDHasSuffix applies the HasSuffix predicate on the "balance_plan_id" field.
+func BalancePlanIDHasSuffix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasSuffix(FieldBalancePlanID, v))
+}
+
+// BalancePlanIDIsNil applies the IsNil predicate on the "balance_plan_id" field.
+func BalancePlanIDIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldBalancePlanID))
+}
+
+// BalancePlanIDNotNil applies the NotNil predicate on the "balance_plan_id" field.
+func BalancePlanIDNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldBalancePlanID))
+}
+
+// BalancePlanIDEqualFold applies the EqualFold predicate on the "balance_plan_id" field.
+func BalancePlanIDEqualFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldEqualFold(FieldBalancePlanID, v))
+}
+
+// BalancePlanIDContainsFold applies the ContainsFold predicate on the "balance_plan_id" field.
+func BalancePlanIDContainsFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldContainsFold(FieldBalancePlanID, v))
+}
+
+// BalancePeriodEndEQ applies the EQ predicate on the "balance_period_end" field.
+func BalancePeriodEndEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalancePeriodEnd, v))
+}
+
+// BalancePeriodEndNEQ applies the NEQ predicate on the "balance_period_end" field.
+func BalancePeriodEndNEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldBalancePeriodEnd, v))
+}
+
+// BalancePeriodEndIn applies the In predicate on the "balance_period_end" field.
+func BalancePeriodEndIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldBalancePeriodEnd, vs...))
+}
+
+// BalancePeriodEndNotIn applies the NotIn predicate on the "balance_period_end" field.
+func BalancePeriodEndNotIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldBalancePeriodEnd, vs...))
+}
+
+// BalancePeriodEndGT applies the GT predicate on the "balance_period_end" field.
+func BalancePeriodEndGT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldBalancePeriodEnd, v))
+}
+
+// BalancePeriodEndGTE applies the GTE predicate on the "balance_period_end" field.
+func BalancePeriodEndGTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldBalancePeriodEnd, v))
+}
+
+// BalancePeriodEndLT applies the LT predicate on the "balance_period_end" field.
+func BalancePeriodEndLT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldBalancePeriodEnd, v))
+}
+
+// BalancePeriodEndLTE applies the LTE predicate on the "balance_period_end" field.
+func BalancePeriodEndLTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldBalancePeriodEnd, v))
+}
+
+// BalancePeriodEndIsNil applies the IsNil predicate on the "balance_period_end" field.
+func BalancePeriodEndIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldBalancePeriodEnd))
+}
+
+// BalancePeriodEndNotNil applies the NotNil predicate on the "balance_period_end" field.
+func BalancePeriodEndNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldBalancePeriodEnd))
+}
+
+// Balance5hUsedEQ applies the EQ predicate on the "balance_5h_used" field.
+func Balance5hUsedEQ(v float64) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalance5hUsed, v))
+}
+
+// Balance5hUsedNEQ applies the NEQ predicate on the "balance_5h_used" field.
+func Balance5hUsedNEQ(v float64) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldBalance5hUsed, v))
+}
+
+// Balance5hUsedIn applies the In predicate on the "balance_5h_used" field.
+func Balance5hUsedIn(vs ...float64) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldBalance5hUsed, vs...))
+}
+
+// Balance5hUsedNotIn applies the NotIn predicate on the "balance_5h_used" field.
+func Balance5hUsedNotIn(vs ...float64) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldBalance5hUsed, vs...))
+}
+
+// Balance5hUsedGT applies the GT predicate on the "balance_5h_used" field.
+func Balance5hUsedGT(v float64) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldBalance5hUsed, v))
+}
+
+// Balance5hUsedGTE applies the GTE predicate on the "balance_5h_used" field.
+func Balance5hUsedGTE(v float64) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldBalance5hUsed, v))
+}
+
+// Balance5hUsedLT applies the LT predicate on the "balance_5h_used" field.
+func Balance5hUsedLT(v float64) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldBalance5hUsed, v))
+}
+
+// Balance5hUsedLTE applies the LTE predicate on the "balance_5h_used" field.
+func Balance5hUsedLTE(v float64) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldBalance5hUsed, v))
+}
+
+// Balance5hUsedIsNil applies the IsNil predicate on the "balance_5h_used" field.
+func Balance5hUsedIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldBalance5hUsed))
+}
+
+// Balance5hUsedNotNil applies the NotNil predicate on the "balance_5h_used" field.
+func Balance5hUsedNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldBalance5hUsed))
+}
+
+// Balance5hCapEQ applies the EQ predicate on the "balance_5h_cap" field.
+func Balance5hCapEQ(v float64) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalance5hCap, v))
+}
+
+// Balance5hCapNEQ applies the NEQ predicate on the "balance_5h_cap" field.
+func Balance5hCapNEQ(v float64) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldBalance5hCap, v))
+}
+
+// Balance5hCapIn applies the In predicate on the "balance_5h_cap" field.
+func Balance5hCapIn(vs ...float64) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldBalance5hCap, vs...))
+}
+
+// Balance5hCapNotIn applies the NotIn predicate on the "balance_5h_cap" field.
+func Balance5hCapNotIn(vs ...float64) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldBalance5hCap, vs...))
+}
+
+// Balance5hCapGT applies the GT predicate on the "balance_5h_cap" field.
+func Balance5hCapGT(v float64) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldBalance5hCap, v))
+}
+
+// Balance5hCapGTE applies the GTE predicate on the "balance_5h_cap" field.
+func Balance5hCapGTE(v float64) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldBalance5hCap, v))
+}
+
+// Balance5hCapLT applies the LT predicate on the "balance_5h_cap" field.
+func Balance5hCapLT(v float64) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldBalance5hCap, v))
+}
+
+// Balance5hCapLTE applies the LTE predicate on the "balance_5h_cap" field.
+func Balance5hCapLTE(v float64) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldBalance5hCap, v))
+}
+
+// Balance5hCapIsNil applies the IsNil predicate on the "balance_5h_cap" field.
+func Balance5hCapIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldBalance5hCap))
+}
+
+// Balance5hCapNotNil applies the NotNil predicate on the "balance_5h_cap" field.
+func Balance5hCapNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldBalance5hCap))
+}
+
+// Balance5hResetAtEQ applies the EQ predicate on the "balance_5h_reset_at" field.
+func Balance5hResetAtEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalance5hResetAt, v))
+}
+
+// Balance5hResetAtNEQ applies the NEQ predicate on the "balance_5h_reset_at" field.
+func Balance5hResetAtNEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldBalance5hResetAt, v))
+}
+
+// Balance5hResetAtIn applies the In predicate on the "balance_5h_reset_at" field.
+func Balance5hResetAtIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldBalance5hResetAt, vs...))
+}
+
+// Balance5hResetAtNotIn applies the NotIn predicate on the "balance_5h_reset_at" field.
+func Balance5hResetAtNotIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldBalance5hResetAt, vs...))
+}
+
+// Balance5hResetAtGT applies the GT predicate on the "balance_5h_reset_at" field.
+func Balance5hResetAtGT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldBalance5hResetAt, v))
+}
+
+// Balance5hResetAtGTE applies the GTE predicate on the "balance_5h_reset_at" field.
+func Balance5hResetAtGTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldBalance5hResetAt, v))
+}
+
+// Balance5hResetAtLT applies the LT predicate on the "balance_5h_reset_at" field.
+func Balance5hResetAtLT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldBalance5hResetAt, v))
+}
+
+// Balance5hResetAtLTE applies the LTE predicate on the "balance_5h_reset_at" field.
+func Balance5hResetAtLTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldBalance5hResetAt, v))
+}
+
+// Balance5hResetAtIsNil applies the IsNil predicate on the "balance_5h_reset_at" field.
+func Balance5hResetAtIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldBalance5hResetAt))
+}
+
+// Balance5hResetAtNotNil applies the NotNil predicate on the "balance_5h_reset_at" field.
+func Balance5hResetAtNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldBalance5hResetAt))
+}
+
+// BalanceWeeklyUsedEQ applies the EQ predicate on the "balance_weekly_used" field.
+func BalanceWeeklyUsedEQ(v float64) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalanceWeeklyUsed, v))
+}
+
+// BalanceWeeklyUsedNEQ applies the NEQ predicate on the "balance_weekly_used" field.
+func BalanceWeeklyUsedNEQ(v float64) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldBalanceWeeklyUsed, v))
+}
+
+// BalanceWeeklyUsedIn applies the In predicate on the "balance_weekly_used" field.
+func BalanceWeeklyUsedIn(vs ...float64) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldBalanceWeeklyUsed, vs...))
+}
+
+// BalanceWeeklyUsedNotIn applies the NotIn predicate on the "balance_weekly_used" field.
+func BalanceWeeklyUsedNotIn(vs ...float64) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldBalanceWeeklyUsed, vs...))
+}
+
+// BalanceWeeklyUsedGT applies the GT predicate on the "balance_weekly_used" field.
+func BalanceWeeklyUsedGT(v float64) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldBalanceWeeklyUsed, v))
+}
+
+// BalanceWeeklyUsedGTE applies the GTE predicate on the "balance_weekly_used" field.
+func BalanceWeeklyUsedGTE(v float64) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldBalanceWeeklyUsed, v))
+}
+
+// BalanceWeeklyUsedLT applies the LT predicate on the "balance_weekly_used" field.
+func BalanceWeeklyUsedLT(v float64) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldBalanceWeeklyUsed, v))
+}
+
+// BalanceWeeklyUsedLTE applies the LTE predicate on the "balance_weekly_used" field.
+func BalanceWeeklyUsedLTE(v float64) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldBalanceWeeklyUsed, v))
+}
+
+// BalanceWeeklyUsedIsNil applies the IsNil predicate on the "balance_weekly_used" field.
+func BalanceWeeklyUsedIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldBalanceWeeklyUsed))
+}
+
+// BalanceWeeklyUsedNotNil applies the NotNil predicate on the "balance_weekly_used" field.
+func BalanceWeeklyUsedNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldBalanceWeeklyUsed))
+}
+
+// BalanceWeeklyCapEQ applies the EQ predicate on the "balance_weekly_cap" field.
+func BalanceWeeklyCapEQ(v float64) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalanceWeeklyCap, v))
+}
+
+// BalanceWeeklyCapNEQ applies the NEQ predicate on the "balance_weekly_cap" field.
+func BalanceWeeklyCapNEQ(v float64) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldBalanceWeeklyCap, v))
+}
+
+// BalanceWeeklyCapIn applies the In predicate on the "balance_weekly_cap" field.
+func BalanceWeeklyCapIn(vs ...float64) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldBalanceWeeklyCap, vs...))
+}
+
+// BalanceWeeklyCapNotIn applies the NotIn predicate on the "balance_weekly_cap" field.
+func BalanceWeeklyCapNotIn(vs ...float64) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldBalanceWeeklyCap, vs...))
+}
+
+// BalanceWeeklyCapGT applies the GT predicate on the "balance_weekly_cap" field.
+func BalanceWeeklyCapGT(v float64) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldBalanceWeeklyCap, v))
+}
+
+// BalanceWeeklyCapGTE applies the GTE predicate on the "balance_weekly_cap" field.
+func BalanceWeeklyCapGTE(v float64) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldBalanceWeeklyCap, v))
+}
+
+// BalanceWeeklyCapLT applies the LT predicate on the "balance_weekly_cap" field.
+func BalanceWeeklyCapLT(v float64) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldBalanceWeeklyCap, v))
+}
+
+// BalanceWeeklyCapLTE applies the LTE predicate on the "balance_weekly_cap" field.
+func BalanceWeeklyCapLTE(v float64) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldBalanceWeeklyCap, v))
+}
+
+// BalanceWeeklyCapIsNil applies the IsNil predicate on the "balance_weekly_cap" field.
+func BalanceWeeklyCapIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldBalanceWeeklyCap))
+}
+
+// BalanceWeeklyCapNotNil applies the NotNil predicate on the "balance_weekly_cap" field.
+func BalanceWeeklyCapNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldBalanceWeeklyCap))
+}
+
+// BalanceWeeklyResetAtEQ applies the EQ predicate on the "balance_weekly_reset_at" field.
+func BalanceWeeklyResetAtEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldBalanceWeeklyResetAt, v))
+}
+
+// BalanceWeeklyResetAtNEQ applies the NEQ predicate on the "balance_weekly_reset_at" field.
+func BalanceWeeklyResetAtNEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldBalanceWeeklyResetAt, v))
+}
+
+// BalanceWeeklyResetAtIn applies the In predicate on the "balance_weekly_reset_at" field.
+func BalanceWeeklyResetAtIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldBalanceWeeklyResetAt, vs...))
+}
+
+// BalanceWeeklyResetAtNotIn applies the NotIn predicate on the "balance_weekly_reset_at" field.
+func BalanceWeeklyResetAtNotIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldBalanceWeeklyResetAt, vs...))
+}
+
+// BalanceWeeklyResetAtGT applies the GT predicate on the "balance_weekly_reset_at" field.
+func BalanceWeeklyResetAtGT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldBalanceWeeklyResetAt, v))
+}
+
+// BalanceWeeklyResetAtGTE applies the GTE predicate on the "balance_weekly_reset_at" field.
+func BalanceWeeklyResetAtGTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldBalanceWeeklyResetAt, v))
+}
+
+// BalanceWeeklyResetAtLT applies the LT predicate on the "balance_weekly_reset_at" field.
+func BalanceWeeklyResetAtLT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldBalanceWeeklyResetAt, v))
+}
+
+// BalanceWeeklyResetAtLTE applies the LTE predicate on the "balance_weekly_reset_at" field.
+func BalanceWeeklyResetAtLTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldBalanceWeeklyResetAt, v))
+}
+
+// BalanceWeeklyResetAtIsNil applies the IsNil predicate on the "balance_weekly_reset_at" field.
+func BalanceWeeklyResetAtIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldBalanceWeeklyResetAt))
+}
+
+// BalanceWeeklyResetAtNotNil applies the NotNil predicate on the "balance_weekly_reset_at" field.
+func BalanceWeeklyResetAtNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldBalanceWeeklyResetAt))
 }
 
 // ConsecutiveFailuresEQ applies the EQ predicate on the "consecutive_failures" field.

@@ -185,12 +185,16 @@ func init() {
 	accountDescSchedulable := accountFields[13].Descriptor()
 	// account.DefaultSchedulable holds the default value on creation for the schedulable field.
 	account.DefaultSchedulable = accountDescSchedulable.Default.(bool)
+	// accountDescBalancePlanID is the schema descriptor for balance_plan_id field.
+	accountDescBalancePlanID := accountFields[20].Descriptor()
+	// account.BalancePlanIDValidator is a validator for the "balance_plan_id" field. It is called by the builders before save.
+	account.BalancePlanIDValidator = accountDescBalancePlanID.Validators[0].(func(string) error)
 	// accountDescConsecutiveFailures is the schema descriptor for consecutive_failures field.
-	accountDescConsecutiveFailures := accountFields[17].Descriptor()
+	accountDescConsecutiveFailures := accountFields[28].Descriptor()
 	// account.DefaultConsecutiveFailures holds the default value on creation for the consecutive_failures field.
 	account.DefaultConsecutiveFailures = accountDescConsecutiveFailures.Default.(int)
 	// accountDescLastHealthCheckOk is the schema descriptor for last_health_check_ok field.
-	accountDescLastHealthCheckOk := accountFields[19].Descriptor()
+	accountDescLastHealthCheckOk := accountFields[30].Descriptor()
 	// account.DefaultLastHealthCheckOk holds the default value on creation for the last_health_check_ok field.
 	account.DefaultLastHealthCheckOk = accountDescLastHealthCheckOk.Default.(bool)
 	accountgroupFields := schema.AccountGroup{}.Fields()

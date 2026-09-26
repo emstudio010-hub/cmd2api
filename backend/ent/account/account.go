@@ -54,6 +54,28 @@ const (
 	FieldRateLimitResetAt = "rate_limit_reset_at"
 	// FieldOverloadUntil holds the string denoting the overload_until field in the database.
 	FieldOverloadUntil = "overload_until"
+	// FieldBalanceFetchedAt holds the string denoting the balance_fetched_at field in the database.
+	FieldBalanceFetchedAt = "balance_fetched_at"
+	// FieldBalanceError holds the string denoting the balance_error field in the database.
+	FieldBalanceError = "balance_error"
+	// FieldBalanceRemaining holds the string denoting the balance_remaining field in the database.
+	FieldBalanceRemaining = "balance_remaining"
+	// FieldBalancePlanID holds the string denoting the balance_plan_id field in the database.
+	FieldBalancePlanID = "balance_plan_id"
+	// FieldBalancePeriodEnd holds the string denoting the balance_period_end field in the database.
+	FieldBalancePeriodEnd = "balance_period_end"
+	// FieldBalance5hUsed holds the string denoting the balance_5h_used field in the database.
+	FieldBalance5hUsed = "balance_5h_used"
+	// FieldBalance5hCap holds the string denoting the balance_5h_cap field in the database.
+	FieldBalance5hCap = "balance_5h_cap"
+	// FieldBalance5hResetAt holds the string denoting the balance_5h_reset_at field in the database.
+	FieldBalance5hResetAt = "balance_5h_reset_at"
+	// FieldBalanceWeeklyUsed holds the string denoting the balance_weekly_used field in the database.
+	FieldBalanceWeeklyUsed = "balance_weekly_used"
+	// FieldBalanceWeeklyCap holds the string denoting the balance_weekly_cap field in the database.
+	FieldBalanceWeeklyCap = "balance_weekly_cap"
+	// FieldBalanceWeeklyResetAt holds the string denoting the balance_weekly_reset_at field in the database.
+	FieldBalanceWeeklyResetAt = "balance_weekly_reset_at"
 	// FieldConsecutiveFailures holds the string denoting the consecutive_failures field in the database.
 	FieldConsecutiveFailures = "consecutive_failures"
 	// FieldLastHealthCheckAt holds the string denoting the last_health_check_at field in the database.
@@ -116,6 +138,17 @@ var Columns = []string{
 	FieldRateLimitedAt,
 	FieldRateLimitResetAt,
 	FieldOverloadUntil,
+	FieldBalanceFetchedAt,
+	FieldBalanceError,
+	FieldBalanceRemaining,
+	FieldBalancePlanID,
+	FieldBalancePeriodEnd,
+	FieldBalance5hUsed,
+	FieldBalance5hCap,
+	FieldBalance5hResetAt,
+	FieldBalanceWeeklyUsed,
+	FieldBalanceWeeklyCap,
+	FieldBalanceWeeklyResetAt,
 	FieldConsecutiveFailures,
 	FieldLastHealthCheckAt,
 	FieldLastHealthCheckOk,
@@ -172,6 +205,8 @@ var (
 	StatusValidator func(string) error
 	// DefaultSchedulable holds the default value on creation for the "schedulable" field.
 	DefaultSchedulable bool
+	// BalancePlanIDValidator is a validator for the "balance_plan_id" field. It is called by the builders before save.
+	BalancePlanIDValidator func(string) error
 	// DefaultConsecutiveFailures holds the default value on creation for the "consecutive_failures" field.
 	DefaultConsecutiveFailures int
 	// DefaultLastHealthCheckOk holds the default value on creation for the "last_health_check_ok" field.
@@ -274,6 +309,61 @@ func ByRateLimitResetAt(opts ...sql.OrderTermOption) OrderOption {
 // ByOverloadUntil orders the results by the overload_until field.
 func ByOverloadUntil(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldOverloadUntil, opts...).ToFunc()
+}
+
+// ByBalanceFetchedAt orders the results by the balance_fetched_at field.
+func ByBalanceFetchedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBalanceFetchedAt, opts...).ToFunc()
+}
+
+// ByBalanceError orders the results by the balance_error field.
+func ByBalanceError(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBalanceError, opts...).ToFunc()
+}
+
+// ByBalanceRemaining orders the results by the balance_remaining field.
+func ByBalanceRemaining(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBalanceRemaining, opts...).ToFunc()
+}
+
+// ByBalancePlanID orders the results by the balance_plan_id field.
+func ByBalancePlanID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBalancePlanID, opts...).ToFunc()
+}
+
+// ByBalancePeriodEnd orders the results by the balance_period_end field.
+func ByBalancePeriodEnd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBalancePeriodEnd, opts...).ToFunc()
+}
+
+// ByBalance5hUsed orders the results by the balance_5h_used field.
+func ByBalance5hUsed(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBalance5hUsed, opts...).ToFunc()
+}
+
+// ByBalance5hCap orders the results by the balance_5h_cap field.
+func ByBalance5hCap(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBalance5hCap, opts...).ToFunc()
+}
+
+// ByBalance5hResetAt orders the results by the balance_5h_reset_at field.
+func ByBalance5hResetAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBalance5hResetAt, opts...).ToFunc()
+}
+
+// ByBalanceWeeklyUsed orders the results by the balance_weekly_used field.
+func ByBalanceWeeklyUsed(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBalanceWeeklyUsed, opts...).ToFunc()
+}
+
+// ByBalanceWeeklyCap orders the results by the balance_weekly_cap field.
+func ByBalanceWeeklyCap(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBalanceWeeklyCap, opts...).ToFunc()
+}
+
+// ByBalanceWeeklyResetAt orders the results by the balance_weekly_reset_at field.
+func ByBalanceWeeklyResetAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBalanceWeeklyResetAt, opts...).ToFunc()
 }
 
 // ByConsecutiveFailures orders the results by the consecutive_failures field.

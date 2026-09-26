@@ -112,6 +112,66 @@ func (Account) Fields() []ent.Field {
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 
+		// ---- 上游余额快照 ----
+		//
+		// 这些是**缓存**，权威来源永远是上游。跟着探活一起刷新，列表页直接读这里，
+		// 打开页面不会去打上游——一池几十个账号就是几十次上游请求，页面会卡死。
+		//
+		// 全部 Nillable：加列时表里已经有数据，非空列没有 SQL DEFAULT 是加不上去的。
+		// 而且「没有值」本身就是有意义的状态（没探过活、或平台不支持查余额），
+		// 用 0 当哨兵会跟「真的用完到 0」混在一起。
+		//
+		// 窗口明细拆成扁平列而不是塞一个 JSONB：这两种窗口是上游协议的一部分，
+		// 结构固定，拆开之后在 psql 里能直接读、能排序筛选，不用解 JSON。
+		field.Time("balance_fetched_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		field.String("balance_error").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "text"}),
+		// balance_remaining 是当前计费周期的**剩余**额度（美元）。
+		field.Float("balance_remaining").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
+		field.String("balance_plan_id").
+			Optional().
+			Nillable().
+			MaxLen(64),
+		// balance_period_end 是当前计费周期的结束时间，也就是月额度重置的时刻。
+		field.Time("balance_period_end").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		// 5 小时滚动窗口：订阅套餐的短期限流，跟月额度是两回事。
+		field.Float("balance_5h_used").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
+		field.Float("balance_5h_cap").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
+		field.Time("balance_5h_reset_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		// 周窗口：同样是订阅套餐的限流。
+		field.Float("balance_weekly_used").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
+		field.Float("balance_weekly_cap").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
+		field.Time("balance_weekly_reset_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+
 		// ---- 健康检查 ----
 		// consecutive_failures 连续失败计数，达到阈值由健康检查任务自动禁用。
 		field.Int("consecutive_failures").

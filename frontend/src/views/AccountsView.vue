@@ -16,9 +16,16 @@ import Spinner from '@/components/ui/Spinner.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import { accountsApi, groupsApi } from '@/api/endpoints'
 import { toMessage } from '@/api/client'
-import type { Account, Group } from '@/api/types'
+import type { Account, AccountBalanceWindow, Group } from '@/api/types'
 import { useToastStore } from '@/stores/toast'
-import { formatDateTime, formatExpiry, formatNumber, formatRelative, isExpired } from '@/utils/format'
+import {
+  formatDateTime,
+  formatExpiry,
+  formatMoney,
+  formatNumber,
+  formatRelative,
+  isExpired,
+} from '@/utils/format'
 import { platformMeta } from '@/utils/platforms'
 
 const toast = useToastStore()
@@ -44,6 +51,8 @@ const deleting = ref(false)
 /** 正在探活的账号 id。探活会真的打上游，必须给出可见的进行中状态。 */
 const checkingId = ref<number | null>(null)
 const togglingId = ref<number | null>(null)
+/** 正在单独刷余额的账号 id。不消耗 token，但还是要给个进行中的反馈。 */
+const balanceLoadingId = ref<number | null>(null)
 
 const statusOptions = [
   { label: '正常', value: 'active' },
@@ -214,6 +223,96 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
+async function refreshBalance(account: Account): Promise<void> {
+  if (balanceLoadingId.value !== null) return
+  balanceLoadingId.value = account.id
+  try {
+    const result = await accountsApi.refreshBalance(account.id)
+    if (result.ok) {
+      toast.success(`「${account.name}」余额已刷新`, balanceSummary(result.account ?? account))
+      // 就地替换那一行，不用重拉整个列表——重拉会让表格闪一下，
+      // 而且会把用户当前的滚动位置和筛选状态一起重置掉。
+      if (result.account) {
+        const index = items.value.findIndex((item) => item.id === account.id)
+        if (index >= 0) items.value[index] = result.account
+      }
+    } else {
+      toast.error(`「${account.name}」余额获取失败`, result.error ?? '上游未返回可用数据')
+      await load()
+    }
+  } catch (err) {
+    toast.error('刷新余额失败', toMessage(err))
+  } finally {
+    balanceLoadingId.value = null
+  }
+}
+
+/** 一句话概括余额，用在 toast 里。 */
+function balanceSummary(account: Account): string {
+  const { remaining, total, plan_name } = account.balance
+  if (remaining === null) return '上游没有返回额度'
+  const money = formatMoney(remaining)
+  const plan = plan_name ? ` · ${plan_name}` : ''
+  return total !== null && total > 0 ? `剩余 ${money} / ${formatMoney(total)}${plan}` : `剩余 ${money}${plan}`
+}
+
+/**
+ * 套餐额度的已用比例。
+ *
+ * 只在套餐总额已知时才算得出来——后端认不出套餐时 total 是 null，
+ * 这时界面上不显示百分比，而不是拿一个猜的分母去算。
+ */
+function planUsedRatio(account: Account): number | null {
+  const { remaining, total } = account.balance
+  if (remaining === null || total === null || total <= 0) return null
+  return Math.min(Math.max(1 - remaining / total, 0), 1)
+}
+
+/** 套餐剩余百分比，算不出来返回 null。 */
+function planRemainingPercent(account: Account): number | null {
+  const ratio = planUsedRatio(account)
+  return ratio === null ? null : Math.round((1 - ratio) * 100)
+}
+
+/** 额度吃紧的程度。>=90% 红、>=70% 黄，其余保持普通文字色。 */
+function quotaTone(ratio: number | null): 'danger' | 'warning' | 'neutral' {
+  if (ratio === null) return 'neutral'
+  if (ratio >= 0.9) return 'danger'
+  if (ratio >= 0.7) return 'warning'
+  return 'neutral'
+}
+
+/** 单个滚动窗口的吃紧程度。窗口的 cap 和 used 上游都会给，不依赖套餐表。 */
+function windowTone(window: AccountBalanceWindow | null): 'danger' | 'warning' | 'neutral' {
+  if (!window || window.cap <= 0) return 'neutral'
+  if (window.exceeded || window.used >= window.cap) return 'danger'
+  return window.used / window.cap >= 0.8 ? 'warning' : 'neutral'
+}
+
+/** 两个窗口里最吃紧的那个，用来决定整行窗口提示的颜色。 */
+function windowsTone(account: Account): 'danger' | 'warning' | 'neutral' {
+  const tones = [
+    windowTone(account.balance.five_hour),
+    windowTone(account.balance.weekly),
+  ]
+  if (tones.includes('danger')) return 'danger'
+  return tones.includes('warning') ? 'warning' : 'neutral'
+}
+
+/** 窗口用量的一句话概括，例如「5h 1% · 周 22%」。没有窗口就返回空串。 */
+function windowsSummary(account: Account): string {
+  const parts: string[] = []
+  const labels: Array<[string, AccountBalanceWindow | null]> = [
+    ['5h', account.balance.five_hour],
+    ['周', account.balance.weekly],
+  ]
+  for (const [label, window] of labels) {
+    if (!window || window.cap <= 0) continue
+    parts.push(`${label} ${Math.round((window.used / window.cap) * 100)}%`)
+  }
+  return parts.join(' · ')
+}
+
 /** 健康状态：优先看最近一次探活结论，没探过就显示未检测。 */
 function healthOf(account: Account): { tone: 'success' | 'danger' | 'neutral'; text: string } {
   if (!account.last_health_check_at) return { tone: 'neutral', text: '未检测' }
@@ -287,11 +386,11 @@ function healthOf(account: Account): { tone: 'success' | 'danger' | 'neutral'; t
     </p>
 
     <DataTable
-      :columns="10"
+      :columns="11"
       :loading="loading"
       :empty="items.length === 0"
       :skeleton-rows="8"
-      min-width="1240px"
+      min-width="1400px"
       hoverable
     >
       <template #head>
@@ -301,6 +400,7 @@ function healthOf(account: Account): { tone: 'success' | 'danger' | 'neutral'; t
         <th class="th text-right">优先级</th>
         <th class="th text-right">并发</th>
         <th class="th text-right">倍率</th>
+        <th class="th">余额</th>
         <th class="th">健康</th>
         <th class="th">最近使用</th>
         <th class="th">过期时间</th>
@@ -394,6 +494,95 @@ function healthOf(account: Account): { tone: 'success' | 'danger' | 'neutral'; t
           <td class="td tnum text-right">{{ account.priority }}</td>
           <td class="td tnum text-right">{{ account.concurrency }}</td>
           <td class="td tnum text-right">{{ account.rate_multiplier }}</td>
+
+          <td class="td">
+            <div class="flex flex-col gap-0.5">
+              <!-- 平台不支持查余额：说清楚是「不支持」，不是「失败了」。
+                   用报错的样式会让管理员去查一个并不存在的故障。 -->
+              <span v-if="!account.balance.supported" class="text-2xs text-subtle">
+                暂不支持
+              </span>
+
+              <template v-else>
+                <div class="flex items-center gap-1.5">
+                  <span
+                    class="tnum font-medium"
+                    :class="{
+                      'text-danger': quotaTone(planUsedRatio(account)) === 'danger',
+                      'text-warning': quotaTone(planUsedRatio(account)) === 'warning',
+                      'text-fg': quotaTone(planUsedRatio(account)) === 'neutral',
+                    }"
+                  >
+                    {{ formatMoney(account.balance.remaining) }}
+                  </span>
+                  <span v-if="account.balance.plan_name" class="text-2xs text-subtle">
+                    {{ account.balance.plan_name }}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    icon
+                    class="ml-auto"
+                    title="只刷新余额，不消耗上游生成额度"
+                    :disabled="balanceLoadingId !== null"
+                    @click="refreshBalance(account)"
+                  >
+                    <Spinner v-if="balanceLoadingId === account.id" :size="11" />
+                    <Icon v-else name="refresh" :size="11" />
+                  </Button>
+                </div>
+
+                <span
+                  v-if="planRemainingPercent(account) !== null"
+                  class="text-2xs"
+                  :class="{
+                    'text-danger': quotaTone(planUsedRatio(account)) === 'danger',
+                    'text-warning': quotaTone(planUsedRatio(account)) === 'warning',
+                    'text-subtle': quotaTone(planUsedRatio(account)) === 'neutral',
+                  }"
+                >
+                  套餐剩余 {{ planRemainingPercent(account) }}%
+                </span>
+
+                <span
+                  v-if="windowsSummary(account)"
+                  class="text-2xs"
+                  :class="{
+                    'text-danger': windowsTone(account) === 'danger',
+                    'text-warning': windowsTone(account) === 'warning',
+                    'text-subtle': windowsTone(account) === 'neutral',
+                  }"
+                  title="订阅套餐的滚动限流窗口，跟月额度是两回事"
+                >
+                  {{ windowsSummary(account) }}
+                </span>
+
+                <!-- 刷新失败：显示原因，同时把「数字是什么时候取的」一并说清，
+                     免得一个三天前的余额被当成当前值。 -->
+                <span
+                  v-if="account.balance.error"
+                  class="max-w-[12rem] truncate text-2xs text-danger"
+                  :title="account.balance.error"
+                >
+                  {{ account.balance.error }}
+                </span>
+
+                <span
+                  v-if="!account.balance.fetched_at && !account.balance.error"
+                  class="text-2xs text-subtle"
+                >
+                  未获取
+                </span>
+                <span
+                  v-else-if="account.balance.fetched_at"
+                  class="text-2xs text-subtle"
+                  :title="account.balance.period_end ? `额度将于 ${formatDateTime(account.balance.period_end)} 重置` : ''"
+                >
+                  {{ formatRelative(account.balance.fetched_at) }}
+                </span>
+              </template>
+            </div>
+          </td>
 
           <td class="td">
             <div class="flex flex-col gap-0.5">

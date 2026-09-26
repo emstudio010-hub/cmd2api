@@ -10,6 +10,7 @@ import (
 	"cmd2api/ent/account"
 	"cmd2api/ent/group"
 	"cmd2api/internal/domain"
+	"cmd2api/internal/relay"
 	"cmd2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -49,8 +50,44 @@ type accountDTO struct {
 
 	GroupIDs []int64 `json:"group_ids"`
 
+	Balance accountBalanceDTO `json:"balance"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// accountBalanceDTO 是账号余额快照的对外表示。
+//
+// 全部字段都可能为空：账号可能从没刷过余额，平台也可能根本不支持查。
+type accountBalanceDTO struct {
+	// Supported 为 false 表示这个上游平台查不了余额（目前是 OpenCode）。
+	// 与「查过但失败」是两回事，界面上的文案也不同。
+	Supported bool `json:"supported"`
+	// FetchedAt 是最近一次**成功**取到余额的时间。刷新失败不会推进它，
+	// 所以它始终代表「界面上的数字是什么时候取的」。
+	FetchedAt *string `json:"fetched_at"`
+	// Error 是最近一次刷新失败的原因；成功时为 null。
+	Error *string `json:"error"`
+	// Remaining 是当前还能花的总额度（美元）。
+	Remaining *float64 `json:"remaining"`
+	// Total 是套餐的月度总额，查不到该套餐时为 null。
+	Total *float64 `json:"total"`
+	// PlanID / PlanName 是套餐标识与展示名。
+	PlanID   string `json:"plan_id"`
+	PlanName string `json:"plan_name"`
+	// PeriodEnd 是当前计费周期的结束时间。
+	PeriodEnd *string `json:"period_end"`
+
+	FiveHour *balanceWindowDTO `json:"five_hour"`
+	Weekly   *balanceWindowDTO `json:"weekly"`
+}
+
+// balanceWindowDTO 是一个滚动额度窗口。
+type balanceWindowDTO struct {
+	Used     float64 `json:"used"`
+	Cap      float64 `json:"cap"`
+	Exceeded bool    `json:"exceeded"`
+	ResetAt  *string `json:"reset_at"`
 }
 
 func (h *Handler) toAccountDTO(acc *ent.Account) accountDTO {
@@ -73,6 +110,7 @@ func (h *Handler) toAccountDTO(acc *ent.Account) accountDTO {
 		LastHealthCheckError: acc.LastHealthCheckError,
 		LatencyMs:            acc.LatencyMs,
 		GroupIDs:             []int64{},
+		Balance:              toBalanceDTO(acc),
 		CreatedAt:            acc.CreatedAt,
 		UpdatedAt:            acc.UpdatedAt,
 	}
@@ -98,6 +136,54 @@ func (h *Handler) toAccountDTO(acc *ent.Account) accountDTO {
 		}
 	}
 	return dto
+}
+
+// toBalanceDTO 把账号上的余额快照整理成嵌套对象。
+//
+// 库里存的是扁平列（balance_5h_used 之类），这里收成嵌套结构再给前端，
+// 免得前端去记一堆前缀。收拢放在这一层，将来改存储结构也不用动界面。
+func toBalanceDTO(acc *ent.Account) accountBalanceDTO {
+	dto := accountBalanceDTO{
+		// 支持与否由**平台**决定，不是由「有没有数据」决定：
+		// OpenCode 是永久不支持，Command Code 只是可能还没刷过。
+		// 混成一个字段的话，界面分不清该说「暂不支持」还是「点一下刷新」。
+		Supported: acc.Platform == domain.PlatformCommandCode,
+		FetchedAt: timePtr(acc.BalanceFetchedAt),
+		Error:     acc.BalanceError,
+		Remaining: acc.BalanceRemaining,
+		PeriodEnd: timePtr(acc.BalancePeriodEnd),
+		FiveHour:  toBalanceWindowDTO(acc.Balance5hUsed, acc.Balance5hCap, acc.Balance5hResetAt),
+		Weekly:    toBalanceWindowDTO(acc.BalanceWeeklyUsed, acc.BalanceWeeklyCap, acc.BalanceWeeklyResetAt),
+	}
+	if acc.BalancePlanID != nil {
+		dto.PlanID = *acc.BalancePlanID
+		dto.PlanName = relay.PlanName(dto.PlanID)
+		// 套餐总额来自内置表，认不出来就留空。界面上少一行百分比，
+		// 好过拿一个猜的分母去算。
+		if total, ok := relay.PlanCredits(dto.PlanID); ok {
+			dto.Total = &total
+		}
+	}
+	return dto
+}
+
+// toBalanceWindowDTO 组装一个额度窗口。
+//
+// 用量和上限缺任何一个都返回 nil：只有一个数字的窗口没法解读，
+// 界面显示「$0.02 / —」还不如不显示。
+func toBalanceWindowDTO(used, capacity *float64, resetAt *time.Time) *balanceWindowDTO {
+	if used == nil || capacity == nil {
+		return nil
+	}
+	return &balanceWindowDTO{
+		Used: *used,
+		Cap:  *capacity,
+		// exceeded 不单独存列：它就是「用量到了上限」，存下来反而多一个
+		// 可能和另两个字段对不上的状态。cap 为 0 时不算超——那是「没有上限」
+		// 而不是「上限为零」，后者会让每个 0/0 的窗口都标红。
+		Exceeded: *capacity > 0 && *used >= *capacity,
+		ResetAt:  timePtr(resetAt),
+	}
 }
 
 // ListAccounts 分页返回账号列表。
@@ -337,6 +423,52 @@ func (h *Handler) CheckAccount(c *gin.Context) {
 		"latency_ms": result.Latency.Milliseconds(),
 		"error":      result.ErrorMessage(),
 	})
+}
+
+// RefreshAccountBalance 刷新账号余额，不做探活。
+//
+// 和「测试连接」分开是有意的：那个会真的发一次生成请求、消耗 token，
+// 这个只打两个只读接口，不花额度，所以可以做成随便点的按钮。
+func (h *Handler) RefreshAccountBalance(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	if h.accounts == nil {
+		fail(c, http.StatusServiceUnavailable, "账号服务未启用")
+		return
+	}
+
+	result, err := h.accounts.RefreshBalance(c.Request.Context(), id)
+	if err != nil {
+		if isNotFound(err) {
+			fail(c, http.StatusNotFound, "账号不存在")
+			return
+		}
+		fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !result.Supported {
+		fail(c, http.StatusBadRequest, "该平台暂不支持查询余额")
+		return
+	}
+	if result.Err != nil {
+		// 刷新失败不算 HTTP 错误：请求本身成功了，只是没拿到数据。
+		// 用 200 + ok:false，跟探活接口保持一致。
+		c.JSON(http.StatusOK, gin.H{"ok": false, "error": result.Err.Error()})
+		return
+	}
+
+	// 重新读一次再返回，让界面能就地更新那一行，不用再拉一遍整个列表。
+	acc, err := h.client.Account.Query().
+		Where(account.IDEQ(id), account.DeletedAtIsNil()).
+		WithGroups().
+		Only(c.Request.Context())
+	if err != nil {
+		h.failInternal(c, "读取账号失败", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "account": h.toAccountDTO(acc)})
 }
 
 type batchImportRequest struct {

@@ -58,6 +58,28 @@ type Account struct {
 	RateLimitResetAt *time.Time `json:"rate_limit_reset_at,omitempty"`
 	// OverloadUntil holds the value of the "overload_until" field.
 	OverloadUntil *time.Time `json:"overload_until,omitempty"`
+	// BalanceFetchedAt holds the value of the "balance_fetched_at" field.
+	BalanceFetchedAt *time.Time `json:"balance_fetched_at,omitempty"`
+	// BalanceError holds the value of the "balance_error" field.
+	BalanceError *string `json:"balance_error,omitempty"`
+	// BalanceRemaining holds the value of the "balance_remaining" field.
+	BalanceRemaining *float64 `json:"balance_remaining,omitempty"`
+	// BalancePlanID holds the value of the "balance_plan_id" field.
+	BalancePlanID *string `json:"balance_plan_id,omitempty"`
+	// BalancePeriodEnd holds the value of the "balance_period_end" field.
+	BalancePeriodEnd *time.Time `json:"balance_period_end,omitempty"`
+	// Balance5hUsed holds the value of the "balance_5h_used" field.
+	Balance5hUsed *float64 `json:"balance_5h_used,omitempty"`
+	// Balance5hCap holds the value of the "balance_5h_cap" field.
+	Balance5hCap *float64 `json:"balance_5h_cap,omitempty"`
+	// Balance5hResetAt holds the value of the "balance_5h_reset_at" field.
+	Balance5hResetAt *time.Time `json:"balance_5h_reset_at,omitempty"`
+	// BalanceWeeklyUsed holds the value of the "balance_weekly_used" field.
+	BalanceWeeklyUsed *float64 `json:"balance_weekly_used,omitempty"`
+	// BalanceWeeklyCap holds the value of the "balance_weekly_cap" field.
+	BalanceWeeklyCap *float64 `json:"balance_weekly_cap,omitempty"`
+	// BalanceWeeklyResetAt holds the value of the "balance_weekly_reset_at" field.
+	BalanceWeeklyResetAt *time.Time `json:"balance_weekly_reset_at,omitempty"`
 	// ConsecutiveFailures holds the value of the "consecutive_failures" field.
 	ConsecutiveFailures int `json:"consecutive_failures,omitempty"`
 	// LastHealthCheckAt holds the value of the "last_health_check_at" field.
@@ -123,13 +145,13 @@ func (*Account) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case account.FieldSchedulable, account.FieldLastHealthCheckOk:
 			values[i] = new(sql.NullBool)
-		case account.FieldRateMultiplier:
+		case account.FieldRateMultiplier, account.FieldBalanceRemaining, account.FieldBalance5hUsed, account.FieldBalance5hCap, account.FieldBalanceWeeklyUsed, account.FieldBalanceWeeklyCap:
 			values[i] = new(sql.NullFloat64)
 		case account.FieldID, account.FieldConcurrency, account.FieldPriority, account.FieldConsecutiveFailures, account.FieldLatencyMs:
 			values[i] = new(sql.NullInt64)
-		case account.FieldName, account.FieldNotes, account.FieldPlatform, account.FieldType, account.FieldStatus, account.FieldErrorMessage, account.FieldLastHealthCheckError:
+		case account.FieldName, account.FieldNotes, account.FieldPlatform, account.FieldType, account.FieldStatus, account.FieldErrorMessage, account.FieldBalanceError, account.FieldBalancePlanID, account.FieldLastHealthCheckError:
 			values[i] = new(sql.NullString)
-		case account.FieldCreatedAt, account.FieldUpdatedAt, account.FieldDeletedAt, account.FieldLastUsedAt, account.FieldExpiresAt, account.FieldRateLimitedAt, account.FieldRateLimitResetAt, account.FieldOverloadUntil, account.FieldLastHealthCheckAt:
+		case account.FieldCreatedAt, account.FieldUpdatedAt, account.FieldDeletedAt, account.FieldLastUsedAt, account.FieldExpiresAt, account.FieldRateLimitedAt, account.FieldRateLimitResetAt, account.FieldOverloadUntil, account.FieldBalanceFetchedAt, account.FieldBalancePeriodEnd, account.FieldBalance5hResetAt, account.FieldBalanceWeeklyResetAt, account.FieldLastHealthCheckAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -283,6 +305,83 @@ func (_m *Account) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.OverloadUntil = new(time.Time)
 				*_m.OverloadUntil = value.Time
+			}
+		case account.FieldBalanceFetchedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field balance_fetched_at", values[i])
+			} else if value.Valid {
+				_m.BalanceFetchedAt = new(time.Time)
+				*_m.BalanceFetchedAt = value.Time
+			}
+		case account.FieldBalanceError:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field balance_error", values[i])
+			} else if value.Valid {
+				_m.BalanceError = new(string)
+				*_m.BalanceError = value.String
+			}
+		case account.FieldBalanceRemaining:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field balance_remaining", values[i])
+			} else if value.Valid {
+				_m.BalanceRemaining = new(float64)
+				*_m.BalanceRemaining = value.Float64
+			}
+		case account.FieldBalancePlanID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field balance_plan_id", values[i])
+			} else if value.Valid {
+				_m.BalancePlanID = new(string)
+				*_m.BalancePlanID = value.String
+			}
+		case account.FieldBalancePeriodEnd:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field balance_period_end", values[i])
+			} else if value.Valid {
+				_m.BalancePeriodEnd = new(time.Time)
+				*_m.BalancePeriodEnd = value.Time
+			}
+		case account.FieldBalance5hUsed:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field balance_5h_used", values[i])
+			} else if value.Valid {
+				_m.Balance5hUsed = new(float64)
+				*_m.Balance5hUsed = value.Float64
+			}
+		case account.FieldBalance5hCap:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field balance_5h_cap", values[i])
+			} else if value.Valid {
+				_m.Balance5hCap = new(float64)
+				*_m.Balance5hCap = value.Float64
+			}
+		case account.FieldBalance5hResetAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field balance_5h_reset_at", values[i])
+			} else if value.Valid {
+				_m.Balance5hResetAt = new(time.Time)
+				*_m.Balance5hResetAt = value.Time
+			}
+		case account.FieldBalanceWeeklyUsed:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field balance_weekly_used", values[i])
+			} else if value.Valid {
+				_m.BalanceWeeklyUsed = new(float64)
+				*_m.BalanceWeeklyUsed = value.Float64
+			}
+		case account.FieldBalanceWeeklyCap:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field balance_weekly_cap", values[i])
+			} else if value.Valid {
+				_m.BalanceWeeklyCap = new(float64)
+				*_m.BalanceWeeklyCap = value.Float64
+			}
+		case account.FieldBalanceWeeklyResetAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field balance_weekly_reset_at", values[i])
+			} else if value.Valid {
+				_m.BalanceWeeklyResetAt = new(time.Time)
+				*_m.BalanceWeeklyResetAt = value.Time
 			}
 		case account.FieldConsecutiveFailures:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -441,6 +540,61 @@ func (_m *Account) String() string {
 	builder.WriteString(", ")
 	if v := _m.OverloadUntil; v != nil {
 		builder.WriteString("overload_until=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.BalanceFetchedAt; v != nil {
+		builder.WriteString("balance_fetched_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.BalanceError; v != nil {
+		builder.WriteString("balance_error=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.BalanceRemaining; v != nil {
+		builder.WriteString("balance_remaining=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.BalancePlanID; v != nil {
+		builder.WriteString("balance_plan_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.BalancePeriodEnd; v != nil {
+		builder.WriteString("balance_period_end=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.Balance5hUsed; v != nil {
+		builder.WriteString("balance_5h_used=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.Balance5hCap; v != nil {
+		builder.WriteString("balance_5h_cap=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.Balance5hResetAt; v != nil {
+		builder.WriteString("balance_5h_reset_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.BalanceWeeklyUsed; v != nil {
+		builder.WriteString("balance_weekly_used=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.BalanceWeeklyCap; v != nil {
+		builder.WriteString("balance_weekly_cap=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.BalanceWeeklyResetAt; v != nil {
+		builder.WriteString("balance_weekly_reset_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")

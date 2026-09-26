@@ -280,6 +280,160 @@ func (_c *AccountCreate) SetNillableOverloadUntil(v *time.Time) *AccountCreate {
 	return _c
 }
 
+// SetBalanceFetchedAt sets the "balance_fetched_at" field.
+func (_c *AccountCreate) SetBalanceFetchedAt(v time.Time) *AccountCreate {
+	_c.mutation.SetBalanceFetchedAt(v)
+	return _c
+}
+
+// SetNillableBalanceFetchedAt sets the "balance_fetched_at" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableBalanceFetchedAt(v *time.Time) *AccountCreate {
+	if v != nil {
+		_c.SetBalanceFetchedAt(*v)
+	}
+	return _c
+}
+
+// SetBalanceError sets the "balance_error" field.
+func (_c *AccountCreate) SetBalanceError(v string) *AccountCreate {
+	_c.mutation.SetBalanceError(v)
+	return _c
+}
+
+// SetNillableBalanceError sets the "balance_error" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableBalanceError(v *string) *AccountCreate {
+	if v != nil {
+		_c.SetBalanceError(*v)
+	}
+	return _c
+}
+
+// SetBalanceRemaining sets the "balance_remaining" field.
+func (_c *AccountCreate) SetBalanceRemaining(v float64) *AccountCreate {
+	_c.mutation.SetBalanceRemaining(v)
+	return _c
+}
+
+// SetNillableBalanceRemaining sets the "balance_remaining" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableBalanceRemaining(v *float64) *AccountCreate {
+	if v != nil {
+		_c.SetBalanceRemaining(*v)
+	}
+	return _c
+}
+
+// SetBalancePlanID sets the "balance_plan_id" field.
+func (_c *AccountCreate) SetBalancePlanID(v string) *AccountCreate {
+	_c.mutation.SetBalancePlanID(v)
+	return _c
+}
+
+// SetNillableBalancePlanID sets the "balance_plan_id" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableBalancePlanID(v *string) *AccountCreate {
+	if v != nil {
+		_c.SetBalancePlanID(*v)
+	}
+	return _c
+}
+
+// SetBalancePeriodEnd sets the "balance_period_end" field.
+func (_c *AccountCreate) SetBalancePeriodEnd(v time.Time) *AccountCreate {
+	_c.mutation.SetBalancePeriodEnd(v)
+	return _c
+}
+
+// SetNillableBalancePeriodEnd sets the "balance_period_end" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableBalancePeriodEnd(v *time.Time) *AccountCreate {
+	if v != nil {
+		_c.SetBalancePeriodEnd(*v)
+	}
+	return _c
+}
+
+// SetBalance5hUsed sets the "balance_5h_used" field.
+func (_c *AccountCreate) SetBalance5hUsed(v float64) *AccountCreate {
+	_c.mutation.SetBalance5hUsed(v)
+	return _c
+}
+
+// SetNillableBalance5hUsed sets the "balance_5h_used" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableBalance5hUsed(v *float64) *AccountCreate {
+	if v != nil {
+		_c.SetBalance5hUsed(*v)
+	}
+	return _c
+}
+
+// SetBalance5hCap sets the "balance_5h_cap" field.
+func (_c *AccountCreate) SetBalance5hCap(v float64) *AccountCreate {
+	_c.mutation.SetBalance5hCap(v)
+	return _c
+}
+
+// SetNillableBalance5hCap sets the "balance_5h_cap" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableBalance5hCap(v *float64) *AccountCreate {
+	if v != nil {
+		_c.SetBalance5hCap(*v)
+	}
+	return _c
+}
+
+// SetBalance5hResetAt sets the "balance_5h_reset_at" field.
+func (_c *AccountCreate) SetBalance5hResetAt(v time.Time) *AccountCreate {
+	_c.mutation.SetBalance5hResetAt(v)
+	return _c
+}
+
+// SetNillableBalance5hResetAt sets the "balance_5h_reset_at" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableBalance5hResetAt(v *time.Time) *AccountCreate {
+	if v != nil {
+		_c.SetBalance5hResetAt(*v)
+	}
+	return _c
+}
+
+// SetBalanceWeeklyUsed sets the "balance_weekly_used" field.
+func (_c *AccountCreate) SetBalanceWeeklyUsed(v float64) *AccountCreate {
+	_c.mutation.SetBalanceWeeklyUsed(v)
+	return _c
+}
+
+// SetNillableBalanceWeeklyUsed sets the "balance_weekly_used" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableBalanceWeeklyUsed(v *float64) *AccountCreate {
+	if v != nil {
+		_c.SetBalanceWeeklyUsed(*v)
+	}
+	return _c
+}
+
+// SetBalanceWeeklyCap sets the "balance_weekly_cap" field.
+func (_c *AccountCreate) SetBalanceWeeklyCap(v float64) *AccountCreate {
+	_c.mutation.SetBalanceWeeklyCap(v)
+	return _c
+}
+
+// SetNillableBalanceWeeklyCap sets the "balance_weekly_cap" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableBalanceWeeklyCap(v *float64) *AccountCreate {
+	if v != nil {
+		_c.SetBalanceWeeklyCap(*v)
+	}
+	return _c
+}
+
+// SetBalanceWeeklyResetAt sets the "balance_weekly_reset_at" field.
+func (_c *AccountCreate) SetBalanceWeeklyResetAt(v time.Time) *AccountCreate {
+	_c.mutation.SetBalanceWeeklyResetAt(v)
+	return _c
+}
+
+// SetNillableBalanceWeeklyResetAt sets the "balance_weekly_reset_at" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableBalanceWeeklyResetAt(v *time.Time) *AccountCreate {
+	if v != nil {
+		_c.SetBalanceWeeklyResetAt(*v)
+	}
+	return _c
+}
+
 // SetConsecutiveFailures sets the "consecutive_failures" field.
 func (_c *AccountCreate) SetConsecutiveFailures(v int) *AccountCreate {
 	_c.mutation.SetConsecutiveFailures(v)
@@ -527,6 +681,11 @@ func (_c *AccountCreate) check() error {
 	if _, ok := _c.mutation.Schedulable(); !ok {
 		return &ValidationError{Name: "schedulable", err: errors.New(`ent: missing required field "Account.schedulable"`)}
 	}
+	if v, ok := _c.mutation.BalancePlanID(); ok {
+		if err := account.BalancePlanIDValidator(v); err != nil {
+			return &ValidationError{Name: "balance_plan_id", err: fmt.Errorf(`ent: validator failed for field "Account.balance_plan_id": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.ConsecutiveFailures(); !ok {
 		return &ValidationError{Name: "consecutive_failures", err: errors.New(`ent: missing required field "Account.consecutive_failures"`)}
 	}
@@ -639,6 +798,50 @@ func (_c *AccountCreate) createSpec() (*Account, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.OverloadUntil(); ok {
 		_spec.SetField(account.FieldOverloadUntil, field.TypeTime, value)
 		_node.OverloadUntil = &value
+	}
+	if value, ok := _c.mutation.BalanceFetchedAt(); ok {
+		_spec.SetField(account.FieldBalanceFetchedAt, field.TypeTime, value)
+		_node.BalanceFetchedAt = &value
+	}
+	if value, ok := _c.mutation.BalanceError(); ok {
+		_spec.SetField(account.FieldBalanceError, field.TypeString, value)
+		_node.BalanceError = &value
+	}
+	if value, ok := _c.mutation.BalanceRemaining(); ok {
+		_spec.SetField(account.FieldBalanceRemaining, field.TypeFloat64, value)
+		_node.BalanceRemaining = &value
+	}
+	if value, ok := _c.mutation.BalancePlanID(); ok {
+		_spec.SetField(account.FieldBalancePlanID, field.TypeString, value)
+		_node.BalancePlanID = &value
+	}
+	if value, ok := _c.mutation.BalancePeriodEnd(); ok {
+		_spec.SetField(account.FieldBalancePeriodEnd, field.TypeTime, value)
+		_node.BalancePeriodEnd = &value
+	}
+	if value, ok := _c.mutation.Balance5hUsed(); ok {
+		_spec.SetField(account.FieldBalance5hUsed, field.TypeFloat64, value)
+		_node.Balance5hUsed = &value
+	}
+	if value, ok := _c.mutation.Balance5hCap(); ok {
+		_spec.SetField(account.FieldBalance5hCap, field.TypeFloat64, value)
+		_node.Balance5hCap = &value
+	}
+	if value, ok := _c.mutation.Balance5hResetAt(); ok {
+		_spec.SetField(account.FieldBalance5hResetAt, field.TypeTime, value)
+		_node.Balance5hResetAt = &value
+	}
+	if value, ok := _c.mutation.BalanceWeeklyUsed(); ok {
+		_spec.SetField(account.FieldBalanceWeeklyUsed, field.TypeFloat64, value)
+		_node.BalanceWeeklyUsed = &value
+	}
+	if value, ok := _c.mutation.BalanceWeeklyCap(); ok {
+		_spec.SetField(account.FieldBalanceWeeklyCap, field.TypeFloat64, value)
+		_node.BalanceWeeklyCap = &value
+	}
+	if value, ok := _c.mutation.BalanceWeeklyResetAt(); ok {
+		_spec.SetField(account.FieldBalanceWeeklyResetAt, field.TypeTime, value)
+		_node.BalanceWeeklyResetAt = &value
 	}
 	if value, ok := _c.mutation.ConsecutiveFailures(); ok {
 		_spec.SetField(account.FieldConsecutiveFailures, field.TypeInt, value)
@@ -1039,6 +1242,234 @@ func (u *AccountUpsert) UpdateOverloadUntil() *AccountUpsert {
 // ClearOverloadUntil clears the value of the "overload_until" field.
 func (u *AccountUpsert) ClearOverloadUntil() *AccountUpsert {
 	u.SetNull(account.FieldOverloadUntil)
+	return u
+}
+
+// SetBalanceFetchedAt sets the "balance_fetched_at" field.
+func (u *AccountUpsert) SetBalanceFetchedAt(v time.Time) *AccountUpsert {
+	u.Set(account.FieldBalanceFetchedAt, v)
+	return u
+}
+
+// UpdateBalanceFetchedAt sets the "balance_fetched_at" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateBalanceFetchedAt() *AccountUpsert {
+	u.SetExcluded(account.FieldBalanceFetchedAt)
+	return u
+}
+
+// ClearBalanceFetchedAt clears the value of the "balance_fetched_at" field.
+func (u *AccountUpsert) ClearBalanceFetchedAt() *AccountUpsert {
+	u.SetNull(account.FieldBalanceFetchedAt)
+	return u
+}
+
+// SetBalanceError sets the "balance_error" field.
+func (u *AccountUpsert) SetBalanceError(v string) *AccountUpsert {
+	u.Set(account.FieldBalanceError, v)
+	return u
+}
+
+// UpdateBalanceError sets the "balance_error" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateBalanceError() *AccountUpsert {
+	u.SetExcluded(account.FieldBalanceError)
+	return u
+}
+
+// ClearBalanceError clears the value of the "balance_error" field.
+func (u *AccountUpsert) ClearBalanceError() *AccountUpsert {
+	u.SetNull(account.FieldBalanceError)
+	return u
+}
+
+// SetBalanceRemaining sets the "balance_remaining" field.
+func (u *AccountUpsert) SetBalanceRemaining(v float64) *AccountUpsert {
+	u.Set(account.FieldBalanceRemaining, v)
+	return u
+}
+
+// UpdateBalanceRemaining sets the "balance_remaining" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateBalanceRemaining() *AccountUpsert {
+	u.SetExcluded(account.FieldBalanceRemaining)
+	return u
+}
+
+// AddBalanceRemaining adds v to the "balance_remaining" field.
+func (u *AccountUpsert) AddBalanceRemaining(v float64) *AccountUpsert {
+	u.Add(account.FieldBalanceRemaining, v)
+	return u
+}
+
+// ClearBalanceRemaining clears the value of the "balance_remaining" field.
+func (u *AccountUpsert) ClearBalanceRemaining() *AccountUpsert {
+	u.SetNull(account.FieldBalanceRemaining)
+	return u
+}
+
+// SetBalancePlanID sets the "balance_plan_id" field.
+func (u *AccountUpsert) SetBalancePlanID(v string) *AccountUpsert {
+	u.Set(account.FieldBalancePlanID, v)
+	return u
+}
+
+// UpdateBalancePlanID sets the "balance_plan_id" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateBalancePlanID() *AccountUpsert {
+	u.SetExcluded(account.FieldBalancePlanID)
+	return u
+}
+
+// ClearBalancePlanID clears the value of the "balance_plan_id" field.
+func (u *AccountUpsert) ClearBalancePlanID() *AccountUpsert {
+	u.SetNull(account.FieldBalancePlanID)
+	return u
+}
+
+// SetBalancePeriodEnd sets the "balance_period_end" field.
+func (u *AccountUpsert) SetBalancePeriodEnd(v time.Time) *AccountUpsert {
+	u.Set(account.FieldBalancePeriodEnd, v)
+	return u
+}
+
+// UpdateBalancePeriodEnd sets the "balance_period_end" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateBalancePeriodEnd() *AccountUpsert {
+	u.SetExcluded(account.FieldBalancePeriodEnd)
+	return u
+}
+
+// ClearBalancePeriodEnd clears the value of the "balance_period_end" field.
+func (u *AccountUpsert) ClearBalancePeriodEnd() *AccountUpsert {
+	u.SetNull(account.FieldBalancePeriodEnd)
+	return u
+}
+
+// SetBalance5hUsed sets the "balance_5h_used" field.
+func (u *AccountUpsert) SetBalance5hUsed(v float64) *AccountUpsert {
+	u.Set(account.FieldBalance5hUsed, v)
+	return u
+}
+
+// UpdateBalance5hUsed sets the "balance_5h_used" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateBalance5hUsed() *AccountUpsert {
+	u.SetExcluded(account.FieldBalance5hUsed)
+	return u
+}
+
+// AddBalance5hUsed adds v to the "balance_5h_used" field.
+func (u *AccountUpsert) AddBalance5hUsed(v float64) *AccountUpsert {
+	u.Add(account.FieldBalance5hUsed, v)
+	return u
+}
+
+// ClearBalance5hUsed clears the value of the "balance_5h_used" field.
+func (u *AccountUpsert) ClearBalance5hUsed() *AccountUpsert {
+	u.SetNull(account.FieldBalance5hUsed)
+	return u
+}
+
+// SetBalance5hCap sets the "balance_5h_cap" field.
+func (u *AccountUpsert) SetBalance5hCap(v float64) *AccountUpsert {
+	u.Set(account.FieldBalance5hCap, v)
+	return u
+}
+
+// UpdateBalance5hCap sets the "balance_5h_cap" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateBalance5hCap() *AccountUpsert {
+	u.SetExcluded(account.FieldBalance5hCap)
+	return u
+}
+
+// AddBalance5hCap adds v to the "balance_5h_cap" field.
+func (u *AccountUpsert) AddBalance5hCap(v float64) *AccountUpsert {
+	u.Add(account.FieldBalance5hCap, v)
+	return u
+}
+
+// ClearBalance5hCap clears the value of the "balance_5h_cap" field.
+func (u *AccountUpsert) ClearBalance5hCap() *AccountUpsert {
+	u.SetNull(account.FieldBalance5hCap)
+	return u
+}
+
+// SetBalance5hResetAt sets the "balance_5h_reset_at" field.
+func (u *AccountUpsert) SetBalance5hResetAt(v time.Time) *AccountUpsert {
+	u.Set(account.FieldBalance5hResetAt, v)
+	return u
+}
+
+// UpdateBalance5hResetAt sets the "balance_5h_reset_at" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateBalance5hResetAt() *AccountUpsert {
+	u.SetExcluded(account.FieldBalance5hResetAt)
+	return u
+}
+
+// ClearBalance5hResetAt clears the value of the "balance_5h_reset_at" field.
+func (u *AccountUpsert) ClearBalance5hResetAt() *AccountUpsert {
+	u.SetNull(account.FieldBalance5hResetAt)
+	return u
+}
+
+// SetBalanceWeeklyUsed sets the "balance_weekly_used" field.
+func (u *AccountUpsert) SetBalanceWeeklyUsed(v float64) *AccountUpsert {
+	u.Set(account.FieldBalanceWeeklyUsed, v)
+	return u
+}
+
+// UpdateBalanceWeeklyUsed sets the "balance_weekly_used" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateBalanceWeeklyUsed() *AccountUpsert {
+	u.SetExcluded(account.FieldBalanceWeeklyUsed)
+	return u
+}
+
+// AddBalanceWeeklyUsed adds v to the "balance_weekly_used" field.
+func (u *AccountUpsert) AddBalanceWeeklyUsed(v float64) *AccountUpsert {
+	u.Add(account.FieldBalanceWeeklyUsed, v)
+	return u
+}
+
+// ClearBalanceWeeklyUsed clears the value of the "balance_weekly_used" field.
+func (u *AccountUpsert) ClearBalanceWeeklyUsed() *AccountUpsert {
+	u.SetNull(account.FieldBalanceWeeklyUsed)
+	return u
+}
+
+// SetBalanceWeeklyCap sets the "balance_weekly_cap" field.
+func (u *AccountUpsert) SetBalanceWeeklyCap(v float64) *AccountUpsert {
+	u.Set(account.FieldBalanceWeeklyCap, v)
+	return u
+}
+
+// UpdateBalanceWeeklyCap sets the "balance_weekly_cap" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateBalanceWeeklyCap() *AccountUpsert {
+	u.SetExcluded(account.FieldBalanceWeeklyCap)
+	return u
+}
+
+// AddBalanceWeeklyCap adds v to the "balance_weekly_cap" field.
+func (u *AccountUpsert) AddBalanceWeeklyCap(v float64) *AccountUpsert {
+	u.Add(account.FieldBalanceWeeklyCap, v)
+	return u
+}
+
+// ClearBalanceWeeklyCap clears the value of the "balance_weekly_cap" field.
+func (u *AccountUpsert) ClearBalanceWeeklyCap() *AccountUpsert {
+	u.SetNull(account.FieldBalanceWeeklyCap)
+	return u
+}
+
+// SetBalanceWeeklyResetAt sets the "balance_weekly_reset_at" field.
+func (u *AccountUpsert) SetBalanceWeeklyResetAt(v time.Time) *AccountUpsert {
+	u.Set(account.FieldBalanceWeeklyResetAt, v)
+	return u
+}
+
+// UpdateBalanceWeeklyResetAt sets the "balance_weekly_reset_at" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateBalanceWeeklyResetAt() *AccountUpsert {
+	u.SetExcluded(account.FieldBalanceWeeklyResetAt)
+	return u
+}
+
+// ClearBalanceWeeklyResetAt clears the value of the "balance_weekly_reset_at" field.
+func (u *AccountUpsert) ClearBalanceWeeklyResetAt() *AccountUpsert {
+	u.SetNull(account.FieldBalanceWeeklyResetAt)
 	return u
 }
 
@@ -1517,6 +1948,272 @@ func (u *AccountUpsertOne) UpdateOverloadUntil() *AccountUpsertOne {
 func (u *AccountUpsertOne) ClearOverloadUntil() *AccountUpsertOne {
 	return u.Update(func(s *AccountUpsert) {
 		s.ClearOverloadUntil()
+	})
+}
+
+// SetBalanceFetchedAt sets the "balance_fetched_at" field.
+func (u *AccountUpsertOne) SetBalanceFetchedAt(v time.Time) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalanceFetchedAt(v)
+	})
+}
+
+// UpdateBalanceFetchedAt sets the "balance_fetched_at" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateBalanceFetchedAt() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalanceFetchedAt()
+	})
+}
+
+// ClearBalanceFetchedAt clears the value of the "balance_fetched_at" field.
+func (u *AccountUpsertOne) ClearBalanceFetchedAt() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalanceFetchedAt()
+	})
+}
+
+// SetBalanceError sets the "balance_error" field.
+func (u *AccountUpsertOne) SetBalanceError(v string) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalanceError(v)
+	})
+}
+
+// UpdateBalanceError sets the "balance_error" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateBalanceError() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalanceError()
+	})
+}
+
+// ClearBalanceError clears the value of the "balance_error" field.
+func (u *AccountUpsertOne) ClearBalanceError() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalanceError()
+	})
+}
+
+// SetBalanceRemaining sets the "balance_remaining" field.
+func (u *AccountUpsertOne) SetBalanceRemaining(v float64) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalanceRemaining(v)
+	})
+}
+
+// AddBalanceRemaining adds v to the "balance_remaining" field.
+func (u *AccountUpsertOne) AddBalanceRemaining(v float64) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.AddBalanceRemaining(v)
+	})
+}
+
+// UpdateBalanceRemaining sets the "balance_remaining" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateBalanceRemaining() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalanceRemaining()
+	})
+}
+
+// ClearBalanceRemaining clears the value of the "balance_remaining" field.
+func (u *AccountUpsertOne) ClearBalanceRemaining() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalanceRemaining()
+	})
+}
+
+// SetBalancePlanID sets the "balance_plan_id" field.
+func (u *AccountUpsertOne) SetBalancePlanID(v string) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalancePlanID(v)
+	})
+}
+
+// UpdateBalancePlanID sets the "balance_plan_id" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateBalancePlanID() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalancePlanID()
+	})
+}
+
+// ClearBalancePlanID clears the value of the "balance_plan_id" field.
+func (u *AccountUpsertOne) ClearBalancePlanID() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalancePlanID()
+	})
+}
+
+// SetBalancePeriodEnd sets the "balance_period_end" field.
+func (u *AccountUpsertOne) SetBalancePeriodEnd(v time.Time) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalancePeriodEnd(v)
+	})
+}
+
+// UpdateBalancePeriodEnd sets the "balance_period_end" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateBalancePeriodEnd() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalancePeriodEnd()
+	})
+}
+
+// ClearBalancePeriodEnd clears the value of the "balance_period_end" field.
+func (u *AccountUpsertOne) ClearBalancePeriodEnd() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalancePeriodEnd()
+	})
+}
+
+// SetBalance5hUsed sets the "balance_5h_used" field.
+func (u *AccountUpsertOne) SetBalance5hUsed(v float64) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalance5hUsed(v)
+	})
+}
+
+// AddBalance5hUsed adds v to the "balance_5h_used" field.
+func (u *AccountUpsertOne) AddBalance5hUsed(v float64) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.AddBalance5hUsed(v)
+	})
+}
+
+// UpdateBalance5hUsed sets the "balance_5h_used" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateBalance5hUsed() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalance5hUsed()
+	})
+}
+
+// ClearBalance5hUsed clears the value of the "balance_5h_used" field.
+func (u *AccountUpsertOne) ClearBalance5hUsed() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalance5hUsed()
+	})
+}
+
+// SetBalance5hCap sets the "balance_5h_cap" field.
+func (u *AccountUpsertOne) SetBalance5hCap(v float64) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalance5hCap(v)
+	})
+}
+
+// AddBalance5hCap adds v to the "balance_5h_cap" field.
+func (u *AccountUpsertOne) AddBalance5hCap(v float64) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.AddBalance5hCap(v)
+	})
+}
+
+// UpdateBalance5hCap sets the "balance_5h_cap" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateBalance5hCap() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalance5hCap()
+	})
+}
+
+// ClearBalance5hCap clears the value of the "balance_5h_cap" field.
+func (u *AccountUpsertOne) ClearBalance5hCap() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalance5hCap()
+	})
+}
+
+// SetBalance5hResetAt sets the "balance_5h_reset_at" field.
+func (u *AccountUpsertOne) SetBalance5hResetAt(v time.Time) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalance5hResetAt(v)
+	})
+}
+
+// UpdateBalance5hResetAt sets the "balance_5h_reset_at" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateBalance5hResetAt() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalance5hResetAt()
+	})
+}
+
+// ClearBalance5hResetAt clears the value of the "balance_5h_reset_at" field.
+func (u *AccountUpsertOne) ClearBalance5hResetAt() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalance5hResetAt()
+	})
+}
+
+// SetBalanceWeeklyUsed sets the "balance_weekly_used" field.
+func (u *AccountUpsertOne) SetBalanceWeeklyUsed(v float64) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalanceWeeklyUsed(v)
+	})
+}
+
+// AddBalanceWeeklyUsed adds v to the "balance_weekly_used" field.
+func (u *AccountUpsertOne) AddBalanceWeeklyUsed(v float64) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.AddBalanceWeeklyUsed(v)
+	})
+}
+
+// UpdateBalanceWeeklyUsed sets the "balance_weekly_used" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateBalanceWeeklyUsed() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalanceWeeklyUsed()
+	})
+}
+
+// ClearBalanceWeeklyUsed clears the value of the "balance_weekly_used" field.
+func (u *AccountUpsertOne) ClearBalanceWeeklyUsed() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalanceWeeklyUsed()
+	})
+}
+
+// SetBalanceWeeklyCap sets the "balance_weekly_cap" field.
+func (u *AccountUpsertOne) SetBalanceWeeklyCap(v float64) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalanceWeeklyCap(v)
+	})
+}
+
+// AddBalanceWeeklyCap adds v to the "balance_weekly_cap" field.
+func (u *AccountUpsertOne) AddBalanceWeeklyCap(v float64) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.AddBalanceWeeklyCap(v)
+	})
+}
+
+// UpdateBalanceWeeklyCap sets the "balance_weekly_cap" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateBalanceWeeklyCap() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalanceWeeklyCap()
+	})
+}
+
+// ClearBalanceWeeklyCap clears the value of the "balance_weekly_cap" field.
+func (u *AccountUpsertOne) ClearBalanceWeeklyCap() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalanceWeeklyCap()
+	})
+}
+
+// SetBalanceWeeklyResetAt sets the "balance_weekly_reset_at" field.
+func (u *AccountUpsertOne) SetBalanceWeeklyResetAt(v time.Time) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalanceWeeklyResetAt(v)
+	})
+}
+
+// UpdateBalanceWeeklyResetAt sets the "balance_weekly_reset_at" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateBalanceWeeklyResetAt() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalanceWeeklyResetAt()
+	})
+}
+
+// ClearBalanceWeeklyResetAt clears the value of the "balance_weekly_reset_at" field.
+func (u *AccountUpsertOne) ClearBalanceWeeklyResetAt() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalanceWeeklyResetAt()
 	})
 }
 
@@ -2176,6 +2873,272 @@ func (u *AccountUpsertBulk) UpdateOverloadUntil() *AccountUpsertBulk {
 func (u *AccountUpsertBulk) ClearOverloadUntil() *AccountUpsertBulk {
 	return u.Update(func(s *AccountUpsert) {
 		s.ClearOverloadUntil()
+	})
+}
+
+// SetBalanceFetchedAt sets the "balance_fetched_at" field.
+func (u *AccountUpsertBulk) SetBalanceFetchedAt(v time.Time) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalanceFetchedAt(v)
+	})
+}
+
+// UpdateBalanceFetchedAt sets the "balance_fetched_at" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateBalanceFetchedAt() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalanceFetchedAt()
+	})
+}
+
+// ClearBalanceFetchedAt clears the value of the "balance_fetched_at" field.
+func (u *AccountUpsertBulk) ClearBalanceFetchedAt() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalanceFetchedAt()
+	})
+}
+
+// SetBalanceError sets the "balance_error" field.
+func (u *AccountUpsertBulk) SetBalanceError(v string) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalanceError(v)
+	})
+}
+
+// UpdateBalanceError sets the "balance_error" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateBalanceError() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalanceError()
+	})
+}
+
+// ClearBalanceError clears the value of the "balance_error" field.
+func (u *AccountUpsertBulk) ClearBalanceError() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalanceError()
+	})
+}
+
+// SetBalanceRemaining sets the "balance_remaining" field.
+func (u *AccountUpsertBulk) SetBalanceRemaining(v float64) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalanceRemaining(v)
+	})
+}
+
+// AddBalanceRemaining adds v to the "balance_remaining" field.
+func (u *AccountUpsertBulk) AddBalanceRemaining(v float64) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.AddBalanceRemaining(v)
+	})
+}
+
+// UpdateBalanceRemaining sets the "balance_remaining" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateBalanceRemaining() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalanceRemaining()
+	})
+}
+
+// ClearBalanceRemaining clears the value of the "balance_remaining" field.
+func (u *AccountUpsertBulk) ClearBalanceRemaining() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalanceRemaining()
+	})
+}
+
+// SetBalancePlanID sets the "balance_plan_id" field.
+func (u *AccountUpsertBulk) SetBalancePlanID(v string) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalancePlanID(v)
+	})
+}
+
+// UpdateBalancePlanID sets the "balance_plan_id" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateBalancePlanID() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalancePlanID()
+	})
+}
+
+// ClearBalancePlanID clears the value of the "balance_plan_id" field.
+func (u *AccountUpsertBulk) ClearBalancePlanID() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalancePlanID()
+	})
+}
+
+// SetBalancePeriodEnd sets the "balance_period_end" field.
+func (u *AccountUpsertBulk) SetBalancePeriodEnd(v time.Time) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalancePeriodEnd(v)
+	})
+}
+
+// UpdateBalancePeriodEnd sets the "balance_period_end" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateBalancePeriodEnd() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalancePeriodEnd()
+	})
+}
+
+// ClearBalancePeriodEnd clears the value of the "balance_period_end" field.
+func (u *AccountUpsertBulk) ClearBalancePeriodEnd() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalancePeriodEnd()
+	})
+}
+
+// SetBalance5hUsed sets the "balance_5h_used" field.
+func (u *AccountUpsertBulk) SetBalance5hUsed(v float64) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalance5hUsed(v)
+	})
+}
+
+// AddBalance5hUsed adds v to the "balance_5h_used" field.
+func (u *AccountUpsertBulk) AddBalance5hUsed(v float64) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.AddBalance5hUsed(v)
+	})
+}
+
+// UpdateBalance5hUsed sets the "balance_5h_used" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateBalance5hUsed() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalance5hUsed()
+	})
+}
+
+// ClearBalance5hUsed clears the value of the "balance_5h_used" field.
+func (u *AccountUpsertBulk) ClearBalance5hUsed() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalance5hUsed()
+	})
+}
+
+// SetBalance5hCap sets the "balance_5h_cap" field.
+func (u *AccountUpsertBulk) SetBalance5hCap(v float64) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalance5hCap(v)
+	})
+}
+
+// AddBalance5hCap adds v to the "balance_5h_cap" field.
+func (u *AccountUpsertBulk) AddBalance5hCap(v float64) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.AddBalance5hCap(v)
+	})
+}
+
+// UpdateBalance5hCap sets the "balance_5h_cap" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateBalance5hCap() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalance5hCap()
+	})
+}
+
+// ClearBalance5hCap clears the value of the "balance_5h_cap" field.
+func (u *AccountUpsertBulk) ClearBalance5hCap() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalance5hCap()
+	})
+}
+
+// SetBalance5hResetAt sets the "balance_5h_reset_at" field.
+func (u *AccountUpsertBulk) SetBalance5hResetAt(v time.Time) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalance5hResetAt(v)
+	})
+}
+
+// UpdateBalance5hResetAt sets the "balance_5h_reset_at" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateBalance5hResetAt() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalance5hResetAt()
+	})
+}
+
+// ClearBalance5hResetAt clears the value of the "balance_5h_reset_at" field.
+func (u *AccountUpsertBulk) ClearBalance5hResetAt() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalance5hResetAt()
+	})
+}
+
+// SetBalanceWeeklyUsed sets the "balance_weekly_used" field.
+func (u *AccountUpsertBulk) SetBalanceWeeklyUsed(v float64) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalanceWeeklyUsed(v)
+	})
+}
+
+// AddBalanceWeeklyUsed adds v to the "balance_weekly_used" field.
+func (u *AccountUpsertBulk) AddBalanceWeeklyUsed(v float64) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.AddBalanceWeeklyUsed(v)
+	})
+}
+
+// UpdateBalanceWeeklyUsed sets the "balance_weekly_used" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateBalanceWeeklyUsed() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalanceWeeklyUsed()
+	})
+}
+
+// ClearBalanceWeeklyUsed clears the value of the "balance_weekly_used" field.
+func (u *AccountUpsertBulk) ClearBalanceWeeklyUsed() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalanceWeeklyUsed()
+	})
+}
+
+// SetBalanceWeeklyCap sets the "balance_weekly_cap" field.
+func (u *AccountUpsertBulk) SetBalanceWeeklyCap(v float64) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalanceWeeklyCap(v)
+	})
+}
+
+// AddBalanceWeeklyCap adds v to the "balance_weekly_cap" field.
+func (u *AccountUpsertBulk) AddBalanceWeeklyCap(v float64) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.AddBalanceWeeklyCap(v)
+	})
+}
+
+// UpdateBalanceWeeklyCap sets the "balance_weekly_cap" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateBalanceWeeklyCap() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalanceWeeklyCap()
+	})
+}
+
+// ClearBalanceWeeklyCap clears the value of the "balance_weekly_cap" field.
+func (u *AccountUpsertBulk) ClearBalanceWeeklyCap() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalanceWeeklyCap()
+	})
+}
+
+// SetBalanceWeeklyResetAt sets the "balance_weekly_reset_at" field.
+func (u *AccountUpsertBulk) SetBalanceWeeklyResetAt(v time.Time) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetBalanceWeeklyResetAt(v)
+	})
+}
+
+// UpdateBalanceWeeklyResetAt sets the "balance_weekly_reset_at" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateBalanceWeeklyResetAt() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateBalanceWeeklyResetAt()
+	})
+}
+
+// ClearBalanceWeeklyResetAt clears the value of the "balance_weekly_reset_at" field.
+func (u *AccountUpsertBulk) ClearBalanceWeeklyResetAt() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearBalanceWeeklyResetAt()
 	})
 }
 

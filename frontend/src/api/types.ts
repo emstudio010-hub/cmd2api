@@ -90,6 +90,52 @@ export interface DashboardResponse {
   end: string
 }
 
+/** 一个滚动额度窗口的用量。used / cap 单位都是美元。 */
+export interface AccountBalanceWindow {
+  used: number
+  cap: number
+  /** 用量是否已经到顶。后端按 used >= cap 推出来，cap 为 0 时不算超。 */
+  exceeded: boolean
+  reset_at: string | null
+}
+
+/**
+ * 上游账号的余额快照。
+ *
+ * `supported` 和「有没有数据」是两回事：OpenCode 是永久不支持，
+ * Command Code 只是可能还没刷过。界面上的文案必须分开——
+ * 混在一起会让人以为账号出了故障。
+ */
+export interface AccountBalance {
+  supported: boolean
+  /**
+   * 最近一次**成功**取到余额的时间。
+   *
+   * 刷新失败不会推进它，所以它始终代表「界面上这个数字是什么时候取的」。
+   */
+  fetched_at: string | null
+  /** 最近一次刷新失败的原因；成功时为 null。 */
+  error: string | null
+  /** 当前还能花的总额度（美元）。 */
+  remaining: number | null
+  /** 套餐的月度总额；后端不认识这个套餐时为 null。 */
+  total: number | null
+  plan_id: string
+  plan_name: string
+  /** 当前计费周期的结束时间，也就是月额度重置的时刻。 */
+  period_end: string | null
+  five_hour: AccountBalanceWindow | null
+  weekly: AccountBalanceWindow | null
+}
+
+/** 手动刷新余额的响应。失败时 ok 为 false，错误在 error 里。 */
+export interface AccountBalanceRefreshResult {
+  ok: boolean
+  error?: string | null
+  /** 成功时回带刷新后的账号，界面可以就地更新那一行。 */
+  account?: Account
+}
+
 export interface Account {
   id: number
   name: string
@@ -117,6 +163,8 @@ export interface Account {
   last_health_check_error: string | null
   latency_ms: number | null
   group_ids: number[]
+  /** 上游余额快照。跟着探活一起刷新，也可单独点按钮刷。 */
+  balance: AccountBalance
   created_at: string
   updated_at: string
 }

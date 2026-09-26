@@ -341,6 +341,261 @@ func (_u *AccountUpdate) ClearOverloadUntil() *AccountUpdate {
 	return _u
 }
 
+// SetBalanceFetchedAt sets the "balance_fetched_at" field.
+func (_u *AccountUpdate) SetBalanceFetchedAt(v time.Time) *AccountUpdate {
+	_u.mutation.SetBalanceFetchedAt(v)
+	return _u
+}
+
+// SetNillableBalanceFetchedAt sets the "balance_fetched_at" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableBalanceFetchedAt(v *time.Time) *AccountUpdate {
+	if v != nil {
+		_u.SetBalanceFetchedAt(*v)
+	}
+	return _u
+}
+
+// ClearBalanceFetchedAt clears the value of the "balance_fetched_at" field.
+func (_u *AccountUpdate) ClearBalanceFetchedAt() *AccountUpdate {
+	_u.mutation.ClearBalanceFetchedAt()
+	return _u
+}
+
+// SetBalanceError sets the "balance_error" field.
+func (_u *AccountUpdate) SetBalanceError(v string) *AccountUpdate {
+	_u.mutation.SetBalanceError(v)
+	return _u
+}
+
+// SetNillableBalanceError sets the "balance_error" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableBalanceError(v *string) *AccountUpdate {
+	if v != nil {
+		_u.SetBalanceError(*v)
+	}
+	return _u
+}
+
+// ClearBalanceError clears the value of the "balance_error" field.
+func (_u *AccountUpdate) ClearBalanceError() *AccountUpdate {
+	_u.mutation.ClearBalanceError()
+	return _u
+}
+
+// SetBalanceRemaining sets the "balance_remaining" field.
+func (_u *AccountUpdate) SetBalanceRemaining(v float64) *AccountUpdate {
+	_u.mutation.ResetBalanceRemaining()
+	_u.mutation.SetBalanceRemaining(v)
+	return _u
+}
+
+// SetNillableBalanceRemaining sets the "balance_remaining" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableBalanceRemaining(v *float64) *AccountUpdate {
+	if v != nil {
+		_u.SetBalanceRemaining(*v)
+	}
+	return _u
+}
+
+// AddBalanceRemaining adds value to the "balance_remaining" field.
+func (_u *AccountUpdate) AddBalanceRemaining(v float64) *AccountUpdate {
+	_u.mutation.AddBalanceRemaining(v)
+	return _u
+}
+
+// ClearBalanceRemaining clears the value of the "balance_remaining" field.
+func (_u *AccountUpdate) ClearBalanceRemaining() *AccountUpdate {
+	_u.mutation.ClearBalanceRemaining()
+	return _u
+}
+
+// SetBalancePlanID sets the "balance_plan_id" field.
+func (_u *AccountUpdate) SetBalancePlanID(v string) *AccountUpdate {
+	_u.mutation.SetBalancePlanID(v)
+	return _u
+}
+
+// SetNillableBalancePlanID sets the "balance_plan_id" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableBalancePlanID(v *string) *AccountUpdate {
+	if v != nil {
+		_u.SetBalancePlanID(*v)
+	}
+	return _u
+}
+
+// ClearBalancePlanID clears the value of the "balance_plan_id" field.
+func (_u *AccountUpdate) ClearBalancePlanID() *AccountUpdate {
+	_u.mutation.ClearBalancePlanID()
+	return _u
+}
+
+// SetBalancePeriodEnd sets the "balance_period_end" field.
+func (_u *AccountUpdate) SetBalancePeriodEnd(v time.Time) *AccountUpdate {
+	_u.mutation.SetBalancePeriodEnd(v)
+	return _u
+}
+
+// SetNillableBalancePeriodEnd sets the "balance_period_end" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableBalancePeriodEnd(v *time.Time) *AccountUpdate {
+	if v != nil {
+		_u.SetBalancePeriodEnd(*v)
+	}
+	return _u
+}
+
+// ClearBalancePeriodEnd clears the value of the "balance_period_end" field.
+func (_u *AccountUpdate) ClearBalancePeriodEnd() *AccountUpdate {
+	_u.mutation.ClearBalancePeriodEnd()
+	return _u
+}
+
+// SetBalance5hUsed sets the "balance_5h_used" field.
+func (_u *AccountUpdate) SetBalance5hUsed(v float64) *AccountUpdate {
+	_u.mutation.ResetBalance5hUsed()
+	_u.mutation.SetBalance5hUsed(v)
+	return _u
+}
+
+// SetNillableBalance5hUsed sets the "balance_5h_used" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableBalance5hUsed(v *float64) *AccountUpdate {
+	if v != nil {
+		_u.SetBalance5hUsed(*v)
+	}
+	return _u
+}
+
+// AddBalance5hUsed adds value to the "balance_5h_used" field.
+func (_u *AccountUpdate) AddBalance5hUsed(v float64) *AccountUpdate {
+	_u.mutation.AddBalance5hUsed(v)
+	return _u
+}
+
+// ClearBalance5hUsed clears the value of the "balance_5h_used" field.
+func (_u *AccountUpdate) ClearBalance5hUsed() *AccountUpdate {
+	_u.mutation.ClearBalance5hUsed()
+	return _u
+}
+
+// SetBalance5hCap sets the "balance_5h_cap" field.
+func (_u *AccountUpdate) SetBalance5hCap(v float64) *AccountUpdate {
+	_u.mutation.ResetBalance5hCap()
+	_u.mutation.SetBalance5hCap(v)
+	return _u
+}
+
+// SetNillableBalance5hCap sets the "balance_5h_cap" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableBalance5hCap(v *float64) *AccountUpdate {
+	if v != nil {
+		_u.SetBalance5hCap(*v)
+	}
+	return _u
+}
+
+// AddBalance5hCap adds value to the "balance_5h_cap" field.
+func (_u *AccountUpdate) AddBalance5hCap(v float64) *AccountUpdate {
+	_u.mutation.AddBalance5hCap(v)
+	return _u
+}
+
+// ClearBalance5hCap clears the value of the "balance_5h_cap" field.
+func (_u *AccountUpdate) ClearBalance5hCap() *AccountUpdate {
+	_u.mutation.ClearBalance5hCap()
+	return _u
+}
+
+// SetBalance5hResetAt sets the "balance_5h_reset_at" field.
+func (_u *AccountUpdate) SetBalance5hResetAt(v time.Time) *AccountUpdate {
+	_u.mutation.SetBalance5hResetAt(v)
+	return _u
+}
+
+// SetNillableBalance5hResetAt sets the "balance_5h_reset_at" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableBalance5hResetAt(v *time.Time) *AccountUpdate {
+	if v != nil {
+		_u.SetBalance5hResetAt(*v)
+	}
+	return _u
+}
+
+// ClearBalance5hResetAt clears the value of the "balance_5h_reset_at" field.
+func (_u *AccountUpdate) ClearBalance5hResetAt() *AccountUpdate {
+	_u.mutation.ClearBalance5hResetAt()
+	return _u
+}
+
+// SetBalanceWeeklyUsed sets the "balance_weekly_used" field.
+func (_u *AccountUpdate) SetBalanceWeeklyUsed(v float64) *AccountUpdate {
+	_u.mutation.ResetBalanceWeeklyUsed()
+	_u.mutation.SetBalanceWeeklyUsed(v)
+	return _u
+}
+
+// SetNillableBalanceWeeklyUsed sets the "balance_weekly_used" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableBalanceWeeklyUsed(v *float64) *AccountUpdate {
+	if v != nil {
+		_u.SetBalanceWeeklyUsed(*v)
+	}
+	return _u
+}
+
+// AddBalanceWeeklyUsed adds value to the "balance_weekly_used" field.
+func (_u *AccountUpdate) AddBalanceWeeklyUsed(v float64) *AccountUpdate {
+	_u.mutation.AddBalanceWeeklyUsed(v)
+	return _u
+}
+
+// ClearBalanceWeeklyUsed clears the value of the "balance_weekly_used" field.
+func (_u *AccountUpdate) ClearBalanceWeeklyUsed() *AccountUpdate {
+	_u.mutation.ClearBalanceWeeklyUsed()
+	return _u
+}
+
+// SetBalanceWeeklyCap sets the "balance_weekly_cap" field.
+func (_u *AccountUpdate) SetBalanceWeeklyCap(v float64) *AccountUpdate {
+	_u.mutation.ResetBalanceWeeklyCap()
+	_u.mutation.SetBalanceWeeklyCap(v)
+	return _u
+}
+
+// SetNillableBalanceWeeklyCap sets the "balance_weekly_cap" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableBalanceWeeklyCap(v *float64) *AccountUpdate {
+	if v != nil {
+		_u.SetBalanceWeeklyCap(*v)
+	}
+	return _u
+}
+
+// AddBalanceWeeklyCap adds value to the "balance_weekly_cap" field.
+func (_u *AccountUpdate) AddBalanceWeeklyCap(v float64) *AccountUpdate {
+	_u.mutation.AddBalanceWeeklyCap(v)
+	return _u
+}
+
+// ClearBalanceWeeklyCap clears the value of the "balance_weekly_cap" field.
+func (_u *AccountUpdate) ClearBalanceWeeklyCap() *AccountUpdate {
+	_u.mutation.ClearBalanceWeeklyCap()
+	return _u
+}
+
+// SetBalanceWeeklyResetAt sets the "balance_weekly_reset_at" field.
+func (_u *AccountUpdate) SetBalanceWeeklyResetAt(v time.Time) *AccountUpdate {
+	_u.mutation.SetBalanceWeeklyResetAt(v)
+	return _u
+}
+
+// SetNillableBalanceWeeklyResetAt sets the "balance_weekly_reset_at" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableBalanceWeeklyResetAt(v *time.Time) *AccountUpdate {
+	if v != nil {
+		_u.SetBalanceWeeklyResetAt(*v)
+	}
+	return _u
+}
+
+// ClearBalanceWeeklyResetAt clears the value of the "balance_weekly_reset_at" field.
+func (_u *AccountUpdate) ClearBalanceWeeklyResetAt() *AccountUpdate {
+	_u.mutation.ClearBalanceWeeklyResetAt()
+	return _u
+}
+
 // SetConsecutiveFailures sets the "consecutive_failures" field.
 func (_u *AccountUpdate) SetConsecutiveFailures(v int) *AccountUpdate {
 	_u.mutation.ResetConsecutiveFailures()
@@ -578,6 +833,11 @@ func (_u *AccountUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Account.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.BalancePlanID(); ok {
+		if err := account.BalancePlanIDValidator(v); err != nil {
+			return &ValidationError{Name: "balance_plan_id", err: fmt.Errorf(`ent: validator failed for field "Account.balance_plan_id": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -682,6 +942,87 @@ func (_u *AccountUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.OverloadUntilCleared() {
 		_spec.ClearField(account.FieldOverloadUntil, field.TypeTime)
+	}
+	if value, ok := _u.mutation.BalanceFetchedAt(); ok {
+		_spec.SetField(account.FieldBalanceFetchedAt, field.TypeTime, value)
+	}
+	if _u.mutation.BalanceFetchedAtCleared() {
+		_spec.ClearField(account.FieldBalanceFetchedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.BalanceError(); ok {
+		_spec.SetField(account.FieldBalanceError, field.TypeString, value)
+	}
+	if _u.mutation.BalanceErrorCleared() {
+		_spec.ClearField(account.FieldBalanceError, field.TypeString)
+	}
+	if value, ok := _u.mutation.BalanceRemaining(); ok {
+		_spec.SetField(account.FieldBalanceRemaining, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBalanceRemaining(); ok {
+		_spec.AddField(account.FieldBalanceRemaining, field.TypeFloat64, value)
+	}
+	if _u.mutation.BalanceRemainingCleared() {
+		_spec.ClearField(account.FieldBalanceRemaining, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.BalancePlanID(); ok {
+		_spec.SetField(account.FieldBalancePlanID, field.TypeString, value)
+	}
+	if _u.mutation.BalancePlanIDCleared() {
+		_spec.ClearField(account.FieldBalancePlanID, field.TypeString)
+	}
+	if value, ok := _u.mutation.BalancePeriodEnd(); ok {
+		_spec.SetField(account.FieldBalancePeriodEnd, field.TypeTime, value)
+	}
+	if _u.mutation.BalancePeriodEndCleared() {
+		_spec.ClearField(account.FieldBalancePeriodEnd, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Balance5hUsed(); ok {
+		_spec.SetField(account.FieldBalance5hUsed, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBalance5hUsed(); ok {
+		_spec.AddField(account.FieldBalance5hUsed, field.TypeFloat64, value)
+	}
+	if _u.mutation.Balance5hUsedCleared() {
+		_spec.ClearField(account.FieldBalance5hUsed, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.Balance5hCap(); ok {
+		_spec.SetField(account.FieldBalance5hCap, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBalance5hCap(); ok {
+		_spec.AddField(account.FieldBalance5hCap, field.TypeFloat64, value)
+	}
+	if _u.mutation.Balance5hCapCleared() {
+		_spec.ClearField(account.FieldBalance5hCap, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.Balance5hResetAt(); ok {
+		_spec.SetField(account.FieldBalance5hResetAt, field.TypeTime, value)
+	}
+	if _u.mutation.Balance5hResetAtCleared() {
+		_spec.ClearField(account.FieldBalance5hResetAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.BalanceWeeklyUsed(); ok {
+		_spec.SetField(account.FieldBalanceWeeklyUsed, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBalanceWeeklyUsed(); ok {
+		_spec.AddField(account.FieldBalanceWeeklyUsed, field.TypeFloat64, value)
+	}
+	if _u.mutation.BalanceWeeklyUsedCleared() {
+		_spec.ClearField(account.FieldBalanceWeeklyUsed, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.BalanceWeeklyCap(); ok {
+		_spec.SetField(account.FieldBalanceWeeklyCap, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBalanceWeeklyCap(); ok {
+		_spec.AddField(account.FieldBalanceWeeklyCap, field.TypeFloat64, value)
+	}
+	if _u.mutation.BalanceWeeklyCapCleared() {
+		_spec.ClearField(account.FieldBalanceWeeklyCap, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.BalanceWeeklyResetAt(); ok {
+		_spec.SetField(account.FieldBalanceWeeklyResetAt, field.TypeTime, value)
+	}
+	if _u.mutation.BalanceWeeklyResetAtCleared() {
+		_spec.ClearField(account.FieldBalanceWeeklyResetAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.ConsecutiveFailures(); ok {
 		_spec.SetField(account.FieldConsecutiveFailures, field.TypeInt, value)
@@ -1146,6 +1487,261 @@ func (_u *AccountUpdateOne) ClearOverloadUntil() *AccountUpdateOne {
 	return _u
 }
 
+// SetBalanceFetchedAt sets the "balance_fetched_at" field.
+func (_u *AccountUpdateOne) SetBalanceFetchedAt(v time.Time) *AccountUpdateOne {
+	_u.mutation.SetBalanceFetchedAt(v)
+	return _u
+}
+
+// SetNillableBalanceFetchedAt sets the "balance_fetched_at" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableBalanceFetchedAt(v *time.Time) *AccountUpdateOne {
+	if v != nil {
+		_u.SetBalanceFetchedAt(*v)
+	}
+	return _u
+}
+
+// ClearBalanceFetchedAt clears the value of the "balance_fetched_at" field.
+func (_u *AccountUpdateOne) ClearBalanceFetchedAt() *AccountUpdateOne {
+	_u.mutation.ClearBalanceFetchedAt()
+	return _u
+}
+
+// SetBalanceError sets the "balance_error" field.
+func (_u *AccountUpdateOne) SetBalanceError(v string) *AccountUpdateOne {
+	_u.mutation.SetBalanceError(v)
+	return _u
+}
+
+// SetNillableBalanceError sets the "balance_error" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableBalanceError(v *string) *AccountUpdateOne {
+	if v != nil {
+		_u.SetBalanceError(*v)
+	}
+	return _u
+}
+
+// ClearBalanceError clears the value of the "balance_error" field.
+func (_u *AccountUpdateOne) ClearBalanceError() *AccountUpdateOne {
+	_u.mutation.ClearBalanceError()
+	return _u
+}
+
+// SetBalanceRemaining sets the "balance_remaining" field.
+func (_u *AccountUpdateOne) SetBalanceRemaining(v float64) *AccountUpdateOne {
+	_u.mutation.ResetBalanceRemaining()
+	_u.mutation.SetBalanceRemaining(v)
+	return _u
+}
+
+// SetNillableBalanceRemaining sets the "balance_remaining" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableBalanceRemaining(v *float64) *AccountUpdateOne {
+	if v != nil {
+		_u.SetBalanceRemaining(*v)
+	}
+	return _u
+}
+
+// AddBalanceRemaining adds value to the "balance_remaining" field.
+func (_u *AccountUpdateOne) AddBalanceRemaining(v float64) *AccountUpdateOne {
+	_u.mutation.AddBalanceRemaining(v)
+	return _u
+}
+
+// ClearBalanceRemaining clears the value of the "balance_remaining" field.
+func (_u *AccountUpdateOne) ClearBalanceRemaining() *AccountUpdateOne {
+	_u.mutation.ClearBalanceRemaining()
+	return _u
+}
+
+// SetBalancePlanID sets the "balance_plan_id" field.
+func (_u *AccountUpdateOne) SetBalancePlanID(v string) *AccountUpdateOne {
+	_u.mutation.SetBalancePlanID(v)
+	return _u
+}
+
+// SetNillableBalancePlanID sets the "balance_plan_id" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableBalancePlanID(v *string) *AccountUpdateOne {
+	if v != nil {
+		_u.SetBalancePlanID(*v)
+	}
+	return _u
+}
+
+// ClearBalancePlanID clears the value of the "balance_plan_id" field.
+func (_u *AccountUpdateOne) ClearBalancePlanID() *AccountUpdateOne {
+	_u.mutation.ClearBalancePlanID()
+	return _u
+}
+
+// SetBalancePeriodEnd sets the "balance_period_end" field.
+func (_u *AccountUpdateOne) SetBalancePeriodEnd(v time.Time) *AccountUpdateOne {
+	_u.mutation.SetBalancePeriodEnd(v)
+	return _u
+}
+
+// SetNillableBalancePeriodEnd sets the "balance_period_end" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableBalancePeriodEnd(v *time.Time) *AccountUpdateOne {
+	if v != nil {
+		_u.SetBalancePeriodEnd(*v)
+	}
+	return _u
+}
+
+// ClearBalancePeriodEnd clears the value of the "balance_period_end" field.
+func (_u *AccountUpdateOne) ClearBalancePeriodEnd() *AccountUpdateOne {
+	_u.mutation.ClearBalancePeriodEnd()
+	return _u
+}
+
+// SetBalance5hUsed sets the "balance_5h_used" field.
+func (_u *AccountUpdateOne) SetBalance5hUsed(v float64) *AccountUpdateOne {
+	_u.mutation.ResetBalance5hUsed()
+	_u.mutation.SetBalance5hUsed(v)
+	return _u
+}
+
+// SetNillableBalance5hUsed sets the "balance_5h_used" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableBalance5hUsed(v *float64) *AccountUpdateOne {
+	if v != nil {
+		_u.SetBalance5hUsed(*v)
+	}
+	return _u
+}
+
+// AddBalance5hUsed adds value to the "balance_5h_used" field.
+func (_u *AccountUpdateOne) AddBalance5hUsed(v float64) *AccountUpdateOne {
+	_u.mutation.AddBalance5hUsed(v)
+	return _u
+}
+
+// ClearBalance5hUsed clears the value of the "balance_5h_used" field.
+func (_u *AccountUpdateOne) ClearBalance5hUsed() *AccountUpdateOne {
+	_u.mutation.ClearBalance5hUsed()
+	return _u
+}
+
+// SetBalance5hCap sets the "balance_5h_cap" field.
+func (_u *AccountUpdateOne) SetBalance5hCap(v float64) *AccountUpdateOne {
+	_u.mutation.ResetBalance5hCap()
+	_u.mutation.SetBalance5hCap(v)
+	return _u
+}
+
+// SetNillableBalance5hCap sets the "balance_5h_cap" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableBalance5hCap(v *float64) *AccountUpdateOne {
+	if v != nil {
+		_u.SetBalance5hCap(*v)
+	}
+	return _u
+}
+
+// AddBalance5hCap adds value to the "balance_5h_cap" field.
+func (_u *AccountUpdateOne) AddBalance5hCap(v float64) *AccountUpdateOne {
+	_u.mutation.AddBalance5hCap(v)
+	return _u
+}
+
+// ClearBalance5hCap clears the value of the "balance_5h_cap" field.
+func (_u *AccountUpdateOne) ClearBalance5hCap() *AccountUpdateOne {
+	_u.mutation.ClearBalance5hCap()
+	return _u
+}
+
+// SetBalance5hResetAt sets the "balance_5h_reset_at" field.
+func (_u *AccountUpdateOne) SetBalance5hResetAt(v time.Time) *AccountUpdateOne {
+	_u.mutation.SetBalance5hResetAt(v)
+	return _u
+}
+
+// SetNillableBalance5hResetAt sets the "balance_5h_reset_at" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableBalance5hResetAt(v *time.Time) *AccountUpdateOne {
+	if v != nil {
+		_u.SetBalance5hResetAt(*v)
+	}
+	return _u
+}
+
+// ClearBalance5hResetAt clears the value of the "balance_5h_reset_at" field.
+func (_u *AccountUpdateOne) ClearBalance5hResetAt() *AccountUpdateOne {
+	_u.mutation.ClearBalance5hResetAt()
+	return _u
+}
+
+// SetBalanceWeeklyUsed sets the "balance_weekly_used" field.
+func (_u *AccountUpdateOne) SetBalanceWeeklyUsed(v float64) *AccountUpdateOne {
+	_u.mutation.ResetBalanceWeeklyUsed()
+	_u.mutation.SetBalanceWeeklyUsed(v)
+	return _u
+}
+
+// SetNillableBalanceWeeklyUsed sets the "balance_weekly_used" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableBalanceWeeklyUsed(v *float64) *AccountUpdateOne {
+	if v != nil {
+		_u.SetBalanceWeeklyUsed(*v)
+	}
+	return _u
+}
+
+// AddBalanceWeeklyUsed adds value to the "balance_weekly_used" field.
+func (_u *AccountUpdateOne) AddBalanceWeeklyUsed(v float64) *AccountUpdateOne {
+	_u.mutation.AddBalanceWeeklyUsed(v)
+	return _u
+}
+
+// ClearBalanceWeeklyUsed clears the value of the "balance_weekly_used" field.
+func (_u *AccountUpdateOne) ClearBalanceWeeklyUsed() *AccountUpdateOne {
+	_u.mutation.ClearBalanceWeeklyUsed()
+	return _u
+}
+
+// SetBalanceWeeklyCap sets the "balance_weekly_cap" field.
+func (_u *AccountUpdateOne) SetBalanceWeeklyCap(v float64) *AccountUpdateOne {
+	_u.mutation.ResetBalanceWeeklyCap()
+	_u.mutation.SetBalanceWeeklyCap(v)
+	return _u
+}
+
+// SetNillableBalanceWeeklyCap sets the "balance_weekly_cap" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableBalanceWeeklyCap(v *float64) *AccountUpdateOne {
+	if v != nil {
+		_u.SetBalanceWeeklyCap(*v)
+	}
+	return _u
+}
+
+// AddBalanceWeeklyCap adds value to the "balance_weekly_cap" field.
+func (_u *AccountUpdateOne) AddBalanceWeeklyCap(v float64) *AccountUpdateOne {
+	_u.mutation.AddBalanceWeeklyCap(v)
+	return _u
+}
+
+// ClearBalanceWeeklyCap clears the value of the "balance_weekly_cap" field.
+func (_u *AccountUpdateOne) ClearBalanceWeeklyCap() *AccountUpdateOne {
+	_u.mutation.ClearBalanceWeeklyCap()
+	return _u
+}
+
+// SetBalanceWeeklyResetAt sets the "balance_weekly_reset_at" field.
+func (_u *AccountUpdateOne) SetBalanceWeeklyResetAt(v time.Time) *AccountUpdateOne {
+	_u.mutation.SetBalanceWeeklyResetAt(v)
+	return _u
+}
+
+// SetNillableBalanceWeeklyResetAt sets the "balance_weekly_reset_at" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableBalanceWeeklyResetAt(v *time.Time) *AccountUpdateOne {
+	if v != nil {
+		_u.SetBalanceWeeklyResetAt(*v)
+	}
+	return _u
+}
+
+// ClearBalanceWeeklyResetAt clears the value of the "balance_weekly_reset_at" field.
+func (_u *AccountUpdateOne) ClearBalanceWeeklyResetAt() *AccountUpdateOne {
+	_u.mutation.ClearBalanceWeeklyResetAt()
+	return _u
+}
+
 // SetConsecutiveFailures sets the "consecutive_failures" field.
 func (_u *AccountUpdateOne) SetConsecutiveFailures(v int) *AccountUpdateOne {
 	_u.mutation.ResetConsecutiveFailures()
@@ -1396,6 +1992,11 @@ func (_u *AccountUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Account.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.BalancePlanID(); ok {
+		if err := account.BalancePlanIDValidator(v); err != nil {
+			return &ValidationError{Name: "balance_plan_id", err: fmt.Errorf(`ent: validator failed for field "Account.balance_plan_id": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -1517,6 +2118,87 @@ func (_u *AccountUpdateOne) sqlSave(ctx context.Context) (_node *Account, err er
 	}
 	if _u.mutation.OverloadUntilCleared() {
 		_spec.ClearField(account.FieldOverloadUntil, field.TypeTime)
+	}
+	if value, ok := _u.mutation.BalanceFetchedAt(); ok {
+		_spec.SetField(account.FieldBalanceFetchedAt, field.TypeTime, value)
+	}
+	if _u.mutation.BalanceFetchedAtCleared() {
+		_spec.ClearField(account.FieldBalanceFetchedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.BalanceError(); ok {
+		_spec.SetField(account.FieldBalanceError, field.TypeString, value)
+	}
+	if _u.mutation.BalanceErrorCleared() {
+		_spec.ClearField(account.FieldBalanceError, field.TypeString)
+	}
+	if value, ok := _u.mutation.BalanceRemaining(); ok {
+		_spec.SetField(account.FieldBalanceRemaining, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBalanceRemaining(); ok {
+		_spec.AddField(account.FieldBalanceRemaining, field.TypeFloat64, value)
+	}
+	if _u.mutation.BalanceRemainingCleared() {
+		_spec.ClearField(account.FieldBalanceRemaining, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.BalancePlanID(); ok {
+		_spec.SetField(account.FieldBalancePlanID, field.TypeString, value)
+	}
+	if _u.mutation.BalancePlanIDCleared() {
+		_spec.ClearField(account.FieldBalancePlanID, field.TypeString)
+	}
+	if value, ok := _u.mutation.BalancePeriodEnd(); ok {
+		_spec.SetField(account.FieldBalancePeriodEnd, field.TypeTime, value)
+	}
+	if _u.mutation.BalancePeriodEndCleared() {
+		_spec.ClearField(account.FieldBalancePeriodEnd, field.TypeTime)
+	}
+	if value, ok := _u.mutation.Balance5hUsed(); ok {
+		_spec.SetField(account.FieldBalance5hUsed, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBalance5hUsed(); ok {
+		_spec.AddField(account.FieldBalance5hUsed, field.TypeFloat64, value)
+	}
+	if _u.mutation.Balance5hUsedCleared() {
+		_spec.ClearField(account.FieldBalance5hUsed, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.Balance5hCap(); ok {
+		_spec.SetField(account.FieldBalance5hCap, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBalance5hCap(); ok {
+		_spec.AddField(account.FieldBalance5hCap, field.TypeFloat64, value)
+	}
+	if _u.mutation.Balance5hCapCleared() {
+		_spec.ClearField(account.FieldBalance5hCap, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.Balance5hResetAt(); ok {
+		_spec.SetField(account.FieldBalance5hResetAt, field.TypeTime, value)
+	}
+	if _u.mutation.Balance5hResetAtCleared() {
+		_spec.ClearField(account.FieldBalance5hResetAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.BalanceWeeklyUsed(); ok {
+		_spec.SetField(account.FieldBalanceWeeklyUsed, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBalanceWeeklyUsed(); ok {
+		_spec.AddField(account.FieldBalanceWeeklyUsed, field.TypeFloat64, value)
+	}
+	if _u.mutation.BalanceWeeklyUsedCleared() {
+		_spec.ClearField(account.FieldBalanceWeeklyUsed, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.BalanceWeeklyCap(); ok {
+		_spec.SetField(account.FieldBalanceWeeklyCap, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBalanceWeeklyCap(); ok {
+		_spec.AddField(account.FieldBalanceWeeklyCap, field.TypeFloat64, value)
+	}
+	if _u.mutation.BalanceWeeklyCapCleared() {
+		_spec.ClearField(account.FieldBalanceWeeklyCap, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.BalanceWeeklyResetAt(); ok {
+		_spec.SetField(account.FieldBalanceWeeklyResetAt, field.TypeTime, value)
+	}
+	if _u.mutation.BalanceWeeklyResetAtCleared() {
+		_spec.ClearField(account.FieldBalanceWeeklyResetAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.ConsecutiveFailures(); ok {
 		_spec.SetField(account.FieldConsecutiveFailures, field.TypeInt, value)

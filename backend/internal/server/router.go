@@ -64,6 +64,8 @@ func NewRouter(opts Options) *gin.Engine {
 			admin.PUT("/accounts/:id", h.UpdateAccount)
 			admin.DELETE("/accounts/:id", h.DeleteAccount)
 			admin.POST("/accounts/:id/check", h.CheckAccount)
+			// 只刷余额，不探活——不消耗上游生成额度，可以随便点。
+			admin.POST("/accounts/:id/balance", h.RefreshAccountBalance)
 
 			admin.GET("/groups", h.ListGroups)
 			admin.POST("/groups", h.CreateGroup)

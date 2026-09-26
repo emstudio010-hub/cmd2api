@@ -29,6 +29,12 @@ type ServerConfig struct {
 	Port int
 	// Mode 传给 gin：debug / release。
 	Mode string
+	// PublicBaseURL 是浏览器授权流程里回调地址的基址。
+	//
+	// 留空表示按发起授权那个请求的 Host 推导——那是最常见也最省事的做法，
+	// 因为管理员访问面板用的地址，就是浏览器能连回这台机器的地址。
+	// 只有反代改写了 Host、或者面板与回调必须分属不同域名时才需要显式指定。
+	PublicBaseURL string
 }
 
 // Addr 返回 net/http 用的监听地址。
@@ -122,9 +128,10 @@ type HealthConfig struct {
 func Load() (*Config, error) {
 	cfg := &Config{
 		Server: ServerConfig{
-			Host: env("SERVER_HOST", "0.0.0.0"),
-			Port: envInt("SERVER_PORT", 8080),
-			Mode: env("GIN_MODE", "release"),
+			Host:          env("SERVER_HOST", "0.0.0.0"),
+			Port:          envInt("SERVER_PORT", 8080),
+			Mode:          env("GIN_MODE", "release"),
+			PublicBaseURL: env("PUBLIC_BASE_URL", ""),
 		},
 		Database: DatabaseConfig{
 			Host:         env("DB_HOST", "127.0.0.1"),

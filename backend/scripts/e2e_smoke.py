@@ -69,6 +69,37 @@ def check(label, condition, detail=""):
         print(u"  ✗ " + label + "  -> " + str(detail))
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """别跟着 303 走。
+
+    浏览器授权的回调就是靠 303 把浏览器送回前端页面的，跟过去就只能看到
+    SPA 的 index.html，看不到 Location 里带的原因。要看的是那个 303 本身。
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def call_no_redirect(method, path, body=None, token=None):
+    """发一个请求，不跟随重定向，返回 (status, headers)。"""
+    data = None
+    headers = {}
+    if body is not None:
+        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        headers["Content-Type"] = "application/json; charset=utf-8"
+    if token:
+        headers["Authorization"] = "Bearer " + token
+
+    opener = urllib.request.build_opener(_NoRedirect)
+    req = urllib.request.Request(BASE + path, data=data, headers=headers, method=method)
+    try:
+        resp = opener.open(req, timeout=30)
+        return resp.getcode(), dict(resp.headers)
+    except urllib.error.HTTPError as e:
+        # 3xx 也会走到这里：redirect_request 返回 None 时 urllib 抛 HTTPError。
+        return e.code, dict(e.headers)
+
+
 print(u"=== cmd2api 端到端冒烟测试 ===\n")
 
 # ---- 认证 ----
@@ -242,6 +273,75 @@ status, body = call("POST", "/api/accounts/batch",
                     token=token)
 check(u"批量导入逐行报错而不是整体失败",
       status == 200 and body.get("created") == 0 and body.get("failed") == 2, (status, body))
+
+# 贴 ~/.commandcode/auth.json 的内容导入。
+#
+# 两个对象首尾相接，而不是包在数组里——这不是合法 JSON，但人手上一次贴
+# 几个账号时就是这么干的，是解析器必须扛住的那种输入。
+# userName 里带上 RUN_ID，既让账号名唯一（重复跑不会撞 409），又能拿来检索。
+auth_json_text = (
+    u'{\n'
+    u'  "apiKey": "user_authjson1-' + RUN_ID + u'",\n'
+    u'  "userId": "u_1",\n'
+    u'  "userName": "授权账号-' + RUN_ID + u'",\n'
+    u'  "keyName": "cli",\n'
+    u'  "authenticatedAt": "2026-09-26T10:00:00.000Z"\n'
+    u'}\n'
+    u'{"apiKey": "user_authjson2-' + RUN_ID + u'", "userName": "第二把-' + RUN_ID + u'"}\n'
+)
+status, body = call("POST", "/api/accounts/batch",
+                    {"keys": auth_json_text, "platform": "commandcode", "group_ids": [cc_group]},
+                    token=token)
+check(u"批量导入 auth.json（两个对象首尾相接）",
+      status == 200 and body.get("created") == 2 and body.get("failed") == 0, (status, body))
+
+status, body = call("GET", "/api/accounts?platform=commandcode&keyword=" + urllib.parse.quote(RUN_ID),
+                    token=token)
+names = sorted(a["name"] for a in body.get("items", []))
+check(u"auth.json 的账号名取自 userName 与 keyName",
+      u"授权账号-" + RUN_ID + u" · cli" in names, names)
+check(u"auth.json 缺 keyName 时只用 userName",
+      u"第二把-" + RUN_ID in names, names)
+
+# 缺 apiKey 的条目要单独报错，不能连累同一批里的好账号。
+status, body = call("POST", "/api/accounts/batch",
+                    {"keys": u'{"apiKey": "user_ok-' + RUN_ID + u'"}\n{"userName": "没有密钥"}\n',
+                     "platform": "commandcode", "group_ids": [cc_group]},
+                    token=token)
+check(u"auth.json 里的坏条目只坏自己",
+      status == 200 and body.get("created") == 1 and body.get("failed") == 1, (status, body))
+
+# ---- 浏览器授权 ----
+print(u"\n[浏览器授权]")
+status, body = call("POST", "/api/accounts/oauth/commandcode",
+                    {"name": uniq(u"待授权"), "group_ids": [cc_group],
+                     "concurrency": 3, "priority": 50}, token=token)
+check(u"发起授权返回跳转地址",
+      status == 200 and "auth_url" in body and "callback_url" in body, (status, body))
+
+auth_url = body.get("auth_url", "")
+query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(auth_url).query))
+check(u"授权地址指向 studio 的 CLI 入口",
+      auth_url.startswith("https://commandcode.ai/studio/auth/cli?"), auth_url)
+check(u"授权地址带回跳与一次性 state",
+      query.get("mode") == "redirect" and len(query.get("state", "")) >= 32
+      and query.get("callback", "").endswith("/api/accounts/oauth/commandcode/callback"),
+      query)
+check(u"发起授权这一步不会先建出账号",
+      call("GET", "/api/accounts?platform=commandcode&keyword=" + urllib.parse.quote(u"待授权-" + RUN_ID),
+           token=token)[1].get("total") == 0, None)
+
+# 回调必须在鉴权之外：浏览器是跳过来的，带不了 Authorization 头。
+# 带一个不存在的 state 时应当被拒，而不是建出账号。
+status, headers = call_no_redirect(
+    "GET", "/api/accounts/oauth/commandcode/callback?state=" + u"x" * 43)
+location = headers.get("Location", "")
+check(u"回调不要求登录（浏览器跳转带不了 token）", status != 401, status)
+check(u"回调拒绝未知 state",
+      status == 303 and location.startswith("/accounts?"), (status, location))
+check(u"失败时回跳地址里带上原因",
+      u"授权链接已失效" in urllib.parse.unquote(location), location)
+check(u"回跳地址里不带密钥", u"apiKey" not in location and u"user_" not in location, location)
 
 # ---- API Key ----
 print(u"\n[API Key]")

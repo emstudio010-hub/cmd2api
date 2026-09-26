@@ -31,6 +31,9 @@ type Handler struct {
 	accounts *service.AccountService
 	cfg      *config.Config
 	logger   *slog.Logger
+
+	// oauthStates 保存进行中的浏览器授权握手。见 account_oauth.go。
+	oauthStates *oauthStateStore
 }
 
 // New 构造 Handler。
@@ -56,6 +59,8 @@ func New(
 		accounts: accounts,
 		cfg:      cfg,
 		logger:   logger,
+		// 授权握手的状态只活在进程内存里，进程起来就建好。
+		oauthStates: newOAuthStateStore(),
 	}
 }
 

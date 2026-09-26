@@ -64,15 +64,32 @@ interface ParsedLine {
 }
 
 /**
+ * 只看第一个非空白字符：{ 或 [ 按 auth.json 处理，否则当密钥列表。
+ *
+ * 前端**只做识别，不做解析**。auth.json 的解析在 backend 的 parseKeyLines 里，
+ * 一处实现、一处测试——那个解析器有真的边界情况（几个文件首尾相接、字符串里的
+ * 花括号），而前端没有测试框架。这里再实现一遍，两边迟早会在某些文件上拆出
+ * 不一样的结果，而那种偏差很难被发现。
+ */
+function looksLikeAuthJson(text: string): boolean {
+  const trimmed = text.trimStart()
+  return trimmed.startsWith('{') || trimmed.startsWith('[')
+}
+
+/**
  * 与后端 parseKeyLines 保持一致的解析规则：
  * 忽略空行与 # 开头的注释；含逗号时按「最后一个逗号」切分「名称,密钥」，
  * 逗号后为空则整行当作密钥。
  *
- * 前端先解析一遍是为了让操作员在提交前就看到「哪一行会被丢掉」，
- * 而不是提交完再对着一串错误猜。格式校验跟着所选平台走：
- * Command Code 要求 user_ 前缀，OpenCode 不做前缀校验。
+ * 这份重复是为了让操作员在提交前就看到「哪一行会被丢掉」，而不是提交完
+ * 再对着一串错误猜——所以只覆盖规则简单的按行格式。auth.json 那种带边界
+ * 情况的解析不在此列，它的逐条结果由提交后的失败列表给出。
  */
+const isAuthJson = computed(() => looksLikeAuthJson(raw.value))
+
 const parsed = computed<ParsedLine[]>(() => {
+  if (isAuthJson.value) return []
+
   const out: ParsedLine[] = []
   const lines = raw.value.split('\n')
   lines.forEach((line, index) => {
@@ -100,9 +117,15 @@ const invalidCount = computed(() => parsed.value.length - validCount.value)
 /** 预览最多渲染 50 行，粘贴几千行时页面不该卡住。 */
 const previewLines = computed(() => parsed.value.slice(0, 50))
 
-const canSubmit = computed(
-  () => validCount.value > 0 && !submitting.value && !modeError.value,
-)
+/**
+ * auth.json 的条数只有后端知道，所以它的可提交条件退化成「贴了东西」。
+ * 逐条成败由导入结果面板回显。
+ */
+const canSubmit = computed(() => {
+  if (submitting.value || modeError.value) return false
+  if (isAuthJson.value) return raw.value.trim().length > 0
+  return validCount.value > 0
+})
 
 function maskKey(key: string): string {
   if (key.length <= 14) return key
@@ -167,6 +190,8 @@ async function submit(): Promise<void> {
   serverError.value = ''
   try {
     const response = await accountsApi.batchImport({
+      // 原样交出去。auth.json 的拆解在后端做，前端不折成「名称,密钥」——
+      // 折一遍就等于在前端再实现一次解析，那正是要避免的。
       keys: raw.value,
       platform: platform.value,
       // Command Code 没有这两个字段，显式传空串。
@@ -282,7 +307,7 @@ function close(): void {
 
       <Field
         label="密钥列表"
-        hint="每行一条；# 开头的行会被忽略。含逗号时取最后一个逗号切分「名称,密钥」"
+        hint="每行一条；# 开头的行会被忽略。含逗号时取最后一个逗号切分「名称,密钥」。也可以直接贴 ~/.commandcode/auth.json 的内容，多个账号首尾相接也行"
       >
         <Textarea
           v-model="raw"
@@ -298,7 +323,26 @@ function close(): void {
         </p>
       </Field>
 
-      <div class="flex flex-wrap items-center gap-3 text-2xs">
+      <!--
+        贴的是 auth.json 时给个明确回执，否则操作员看不到任何反应，第一反应
+        是以为贴错了。这里说不出条数——解析在后端做，前端不预先拆一遍。
+      -->
+      <p
+        v-if="isAuthJson"
+        class="flex items-start gap-1.5 rounded-md border border-accent/30 bg-accent/8 px-2.5 py-2 text-2xs leading-relaxed text-accent"
+      >
+        <Icon name="checkCircle" :size="13" class="mt-px" />
+        <span>
+          识别为 Command Code 的 auth.json，整段交给后端逐条解析。账号名取自
+          文件里的 userName 与 keyName；读不出密钥的条目会单独列在导入结果里。
+        </span>
+      </p>
+
+      <!--
+        预览表只在按行格式下出现：它渲染的是前端那份按行解析的结果，
+        auth.json 的解析结果只有后端有。
+      -->
+      <div v-if="parsed.length > 0" class="flex flex-wrap items-center gap-3 text-2xs">
         <span class="text-subtle">已解析</span>
         <span class="tnum text-fg">{{ parsed.length }} 行</span>
         <span class="tnum text-success">格式正确 {{ validCount }}</span>
@@ -326,7 +370,9 @@ function close(): void {
               <td class="td">
                 {{ item.name || '（自动命名）' }}
               </td>
-              <td class="td font-mono text-muted">{{ maskKey(item.key) }}</td>
+              <td class="td font-mono text-muted">
+                {{ item.key ? maskKey(item.key) : '—' }}
+              </td>
               <td class="td">
                 <Icon
                   :name="item.valid ? 'checkCircle' : 'alertCircle'"
@@ -400,7 +446,8 @@ function close(): void {
         :disabled="!canSubmit"
         @click="submit"
       >
-        导入 {{ validCount }} 个账号
+        <!-- auth.json 的条数前端不知道，也就不报数。 -->
+        {{ isAuthJson ? '导入账号' : `导入 ${validCount} 个账号` }}
       </Button>
     </template>
   </Modal>

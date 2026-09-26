@@ -466,6 +466,17 @@ func (s *AccountService) Check(ctx context.Context, id int64) (*relay.ProbeResul
 	return &result, nil
 }
 
+// FetchWhoami 用一把**还没入库**的密钥去上游换账号身份。
+//
+// 单独开一个方法是因为浏览器授权收尾时密钥还不在账号表里，走不了
+// TargetByAccountID 那条正常路径，但「先验一次再建号」这件事必须做——
+// 建出一个用不了的账号，比当场告诉用户密钥不行要糟得多。
+//
+// whoami 不生成 token、不占额度，所以它比探活更适合做这件事。
+func (s *AccountService) FetchWhoami(ctx context.Context, apiKey string) (relay.Whoami, error) {
+	return s.relayClient.FetchWhoami(ctx, apiKey)
+}
+
 // RefreshBalance 只刷新余额，不做探活。
 //
 // 跟探活分开是有意的：探活会真的发一次生成请求、消耗 token，

@@ -63,6 +63,11 @@ services:
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@cmd2api.local}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?BOOTSTRAP_ADMIN_PASSWORD 必须设置}
 
+      # 浏览器授权时 studio 把浏览器跳回来的地址前缀。
+      # 留空则按请求的 Host 推出来，本地和隧道场景都对；后面挂反代时如果推错了
+      # （比如反代没传 X-Forwarded-Proto），在这里写死成对外域名。
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+
       # ---- Command Code 上游 ----
       CC_API_BASE: ${CC_API_BASE:-https://api.commandcode.ai}
       # 留空则直连。国内服务器通常需要填代理才能连上上游。

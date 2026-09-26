@@ -85,6 +85,11 @@ ENCRYPTION_KEY=$(gen 32)
 BOOTSTRAP_ADMIN_EMAIL=admin@cmd2api.local
 BOOTSTRAP_ADMIN_PASSWORD=$(gen 12)
 
+# 浏览器授权时 studio 把浏览器跳回来的地址前缀。
+# 留空即按请求的 Host 推出来，本地和隧道场景都对；挂了反代且推错时
+# 在这里填对外域名，例如 https://cmd2api.example.com
+PUBLIC_BASE_URL=
+
 # ---- Command Code 上游 ----
 CC_API_BASE=https://api.commandcode.ai
 # 服务器在国内、访问上游需要走代理时填这里，例如 http://127.0.0.1:7890

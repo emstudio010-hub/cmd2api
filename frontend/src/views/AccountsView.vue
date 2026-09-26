@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import AccountFormModal from '@/components/accounts/AccountFormModal.vue'
 import BatchImportModal from '@/components/accounts/BatchImportModal.vue'
@@ -29,6 +30,8 @@ import {
 import { platformMeta } from '@/utils/platforms'
 
 const toast = useToastStore()
+const route = useRoute()
+const router = useRouter()
 
 const items = ref<Account[]>([])
 const groups = ref<Group[]>([])
@@ -145,7 +148,33 @@ watch([page, pageSize], () => {
   void load()
 })
 
+/**
+ * 收尾浏览器授权。
+ *
+ * 授权结束后 studio 把浏览器跳到后端回调地址，后端建完账号再 303 回这里，
+ * 并把结果挂在 query 上。所以要在这里把结果讲给用户听，然后**立刻把参数
+ * 从地址栏抹掉**——它带着账号名之类的信息，留着的话刷新一次就再提示一遍，
+ * 而且会被复制进别人看到的链接里。
+ *
+ * 失败时后端只给一句人话原因，密钥不在其中（那是有意的，见后端注释）。
+ */
+function consumeOAuthResult(): void {
+  const status = route.query.oauth
+  if (typeof status !== 'string' || !status) return
+
+  const name = typeof route.query.name === 'string' ? route.query.name : ''
+  const message = typeof route.query.message === 'string' ? route.query.message : ''
+
+  if (status === 'ok') {
+    toast.success(name ? `账号「${name}」已创建` : '账号已创建', '已完成浏览器授权')
+  } else {
+    toast.error('浏览器授权未完成', message || '请重试')
+  }
+  void router.replace({ query: {} })
+}
+
 onMounted(async () => {
+  consumeOAuthResult()
   await Promise.all([load(), loadGroups()])
 })
 

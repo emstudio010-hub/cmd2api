@@ -20,6 +20,8 @@ import type {
   MeResponse,
   ModelListResponse,
   SettingsResponse,
+  StartAccountOAuthPayload,
+  StartAccountOAuthResult,
   UpdateAccountPayload,
   UsageLogListResponse,
   UsageLogQuery,
@@ -89,6 +91,15 @@ export const accountsApi = {
   },
   batchImport(payload: BatchImportPayload) {
     return post<BatchImportResult>('/accounts/batch', payload)
+  },
+  /**
+   * 发起浏览器授权，拿到要跳过去的地址。
+   *
+   * 这一步**不建账号**：账号要等 studio 把密钥带回回调地址才建得出来，
+   * 所以要跳走的是整个页面，而不是在这里等一个响应。
+   */
+  startOAuth(payload: StartAccountOAuthPayload) {
+    return post<StartAccountOAuthResult>('/accounts/oauth/commandcode', payload)
   },
 }
 

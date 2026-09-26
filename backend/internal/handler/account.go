@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -555,8 +556,19 @@ func (l accountKeyLine) ShortKey() string {
 
 // parseKeyLines 解析批量导入的文本。
 //
-// 支持 "名称,密钥" 和只有密钥两种写法，空行与 # 注释忽略。
+// 认两种输入：
+//
+//  1. 密钥列表：每行一条，支持 "名称,密钥" 和只有密钥两种写法，空行与 # 注释忽略。
+//  2. Command Code CLI 的授权文件（~/.commandcode/auth.json）内容：整个文件
+//     贴进来即可，apiKey 会被取出来，userName / keyName 拼成账号名。
+//
+// 解析只在这一处做。前端只负责认出用户贴的是哪一种、给个提示，不自己拆一遍
+// ——两份实现迟早会在某些文件上拆出不一样的结果，而那种偏差很难被发现。
 func parseKeyLines(raw string) []accountKeyLine {
+	if looksLikeAuthFile(raw) {
+		return parseAuthFile(raw)
+	}
+
 	var out []accountKeyLine
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
@@ -574,6 +586,107 @@ func parseKeyLines(raw string) []accountKeyLine {
 		out = append(out, accountKeyLine{Key: line})
 	}
 	return out
+}
+
+// authFileEntry 是 ~/.commandcode/auth.json 里我们关心的字段。
+//
+// CLI 登录成功后写下的就是这个结构。userId、authenticatedAt 那些用不上：
+// 前者是上游的内部 id，后者是客户端本地的时间戳，对我们都没有意义。
+type authFileEntry struct {
+	APIKey   string `json:"apiKey"`
+	UserName string `json:"userName"`
+	KeyName  string `json:"keyName"`
+}
+
+// looksLikeAuthFile 只看第一个非空白字符。
+//
+// 密钥一定是 user_ 开头，不会撞上花括号，所以这个判断是安全的。
+func looksLikeAuthFile(raw string) bool {
+	trimmed := strings.TrimLeft(raw, " \t\r\n")
+	return strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")
+}
+
+// parseAuthFile 从授权文件内容里逐条取出密钥。
+//
+// 读不出密钥的条目会作为空密钥返回，交给下游按「密钥不能为空」报错——
+// 这样失败原因能和其它情况走同一条回显路径，操作员看到的是「第 N 条为什么不行」，
+// 而不是「整个文件解析失败」。
+func parseAuthFile(raw string) []accountKeyLine {
+	blocks := splitJSONObjects(raw)
+	out := make([]accountKeyLine, 0, len(blocks))
+	for _, block := range blocks {
+		var entry authFileEntry
+		// 单条解析失败就当成一条空密钥，让它在失败列表里单独出现。
+		// 整段放弃的话，一个坏条目会连累后面所有好账号。
+		if err := json.Unmarshal([]byte(block), &entry); err != nil {
+			out = append(out, accountKeyLine{})
+			continue
+		}
+		out = append(out, accountKeyLine{
+			Name: joinNonEmpty(" · ", entry.UserName, entry.KeyName),
+			Key:  strings.TrimSpace(entry.APIKey),
+		})
+	}
+	return out
+}
+
+// splitJSONObjects 把文本里所有顶层 JSON 对象切出来。
+//
+// 不对整段做 json.Unmarshal，是因为「多个账号」的贴法不止一种：可以是数组，
+// 也可以是把几个 auth.json 的内容首尾相接。后者不是合法 JSON，但人手粘贴
+// 时就是这么干的。所以按花括号配对来切，字符串内部的括号要跳过——
+// 密钥或用户名里出现花括号虽然少见，但一旦出现就会把配对彻底带偏。
+func splitJSONObjects(raw string) []string {
+	var out []string
+	depth, start := 0, -1
+	inString, escaped := false, false
+
+	for i, r := range raw {
+		if inString {
+			switch {
+			case escaped:
+				escaped = false
+			case r == '\\':
+				escaped = true
+			case r == '"':
+				inString = false
+			}
+			continue
+		}
+		switch r {
+		case '"':
+			inString = true
+		case '{':
+			if depth == 0 {
+				start = i
+			}
+			depth++
+		case '}':
+			if depth > 0 {
+				depth--
+				if depth == 0 && start >= 0 {
+					// 花括号是单字节，i 就是它的字节下标。
+					out = append(out, raw[start:i+1])
+					start = -1
+				}
+			}
+		}
+	}
+	return out
+}
+
+// joinNonEmpty 把非空片段用 sep 连起来。
+//
+// sep 必须在最前面：可变参数只能放末尾，所以它没法像 strings.Join 那样收尾。
+// 调用时别把它和片段写反了——写反了不会报错，只会安静地拼出一串反过来的东西。
+func joinNonEmpty(sep string, parts ...string) string {
+	kept := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			kept = append(kept, part)
+		}
+	}
+	return strings.Join(kept, sep)
 }
 
 // parseOptionalTime 解析可选的 RFC3339 时间字符串。

@@ -12,6 +12,10 @@ backend/cmd2api.exe
 *.test
 *.out
 
+# Python（脚本目录里跑冒烟测试会留下字节码缓存）
+__pycache__/
+*.pyc
+
 # 前端
 frontend/node_modules/
 frontend/dist/

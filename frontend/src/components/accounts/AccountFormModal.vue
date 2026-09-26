@@ -68,6 +68,7 @@ const schedulable = ref(true)
 const submitting = ref(false)
 const serverError = ref('')
 const showKey = ref(false)
+const oauthLoading = ref(false)
 
 const statusOptions = [
   { label: '正常', value: 'active' },
@@ -115,6 +116,22 @@ const errors = computed(() => {
 })
 
 const valid = computed(() => Object.keys(errors.value).length === 0)
+
+/**
+ * 浏览器授权这条路不校验密钥——那正是它要去拿的东西。
+ * 其余字段的校验跟手动填一样，因为它们要一起存到后端等回调时建号。
+ */
+const validWithoutKey = computed(() =>
+  Object.keys(errors.value).every((field) => field === 'apiKey'),
+)
+
+/**
+ * 只有新建 Command Code 账号时能给浏览器授权入口。
+ *
+ * 编辑态不给：换密钥是另一回事，而且平台不可改。OpenCode 也不给：
+ * 上游没有对应的授权流程，硬放一个按钮只会让人以为它坏了。
+ */
+const canStartOAuth = computed(() => !isEdit.value && platform.value === 'commandcode')
 
 function reset(): void {
   const account = props.account
@@ -192,6 +209,43 @@ function clearExpiryTime(): void {
 
 function close(): void {
   emit('update:open', false)
+}
+
+/**
+ * 用浏览器登录代替手贴密钥。
+ *
+ * 点了就整页跳走：授权完成后 studio 会把浏览器跳到后端回调地址，后端建完
+ * 账号再把人送回本页面，结果通过 ?oauth= 传回来。所以这里不能开新标签页——
+ * 结果要落在这个页面才能被读到。
+ *
+ * 表单里已填的字段会先存到后端，回调时用来建号，所以名称、分组这些不用
+ * 在授权回来后重填。
+ */
+async function startOAuth(): Promise<void> {
+  if (!validWithoutKey.value || oauthLoading.value) return
+  const selectedPlatform = platform.value
+  if (!selectedPlatform) return
+
+  oauthLoading.value = true
+  serverError.value = ''
+  try {
+    const expires = clearExpiry.value ? '' : fromLocalInputValue(expiresAt.value) || undefined
+    const result = await accountsApi.startOAuth({
+      name: name.value.trim(),
+      notes: notes.value,
+      concurrency: toNumber(concurrency.value),
+      priority: toNumber(priority.value),
+      rate_multiplier: toNumber(multiplier.value),
+      group_ids: selectedGroupIds(),
+      ...(expires ? { expires_at: expires } : {}),
+    })
+    window.location.assign(result.auth_url)
+    // 跳转已经发出，之后的代码基本不会跑到；保持 loading 状态，
+    // 免得用户在页面卸载前又点一次，凭空多出一个待授权握手。
+  } catch (err) {
+    serverError.value = toMessage(err, '发起浏览器授权失败')
+    oauthLoading.value = false
+  }
 }
 
 async function submit(): Promise<void> {
@@ -316,6 +370,26 @@ async function submit(): Promise<void> {
             >
               <Icon :name="showKey ? 'eyeOff' : 'eye'" :size="14" />
             </button>
+          </div>
+
+          <!--
+            浏览器授权是手贴密钥之外的另一条路，不是替代：两条路拿到的
+            都是同一种 user_ 密钥，谁方便用谁。
+          -->
+          <div v-if="canStartOAuth" class="mt-2 flex flex-wrap items-center gap-2">
+            <Button
+              variant="subtle"
+              size="sm"
+              :loading="oauthLoading"
+              :disabled="!validWithoutKey"
+              @click="startOAuth"
+            >
+              <Icon name="external" :size="13" />
+              用浏览器登录
+            </Button>
+            <span class="text-2xs text-subtle">
+              跳去 Command Code 登录，回来后自动建号
+            </span>
           </div>
         </Field>
       </div>

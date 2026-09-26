@@ -227,6 +227,31 @@ export interface AccountCheckResult {
   error: string | null
 }
 
+/**
+ * 发起浏览器授权时提交的账号字段。
+ *
+ * 跟 CreateAccountPayload 长得像，但没有 api_key——那正是这趟授权要去拿的
+ * 东西。这些字段会先存在后端，等 studio 把密钥带回来时一起用来建号。
+ */
+export interface StartAccountOAuthPayload {
+  name?: string
+  notes?: string
+  concurrency?: number
+  priority?: number
+  rate_multiplier?: number
+  group_ids?: number[]
+  expires_at?: string | null
+}
+
+export interface StartAccountOAuthResult {
+  /** 要跳过去的授权页地址。 */
+  auth_url: string
+  /** 后端算出来的回调地址。显示给用户看，出问题时一眼能看出拼错没有。 */
+  callback_url: string
+  /** 这次握手的失效时间。 */
+  expires_at: string
+}
+
 export interface BatchImportPayload {
   keys: string
   /** 必填。整批共用同一个平台，OpenCode 的分组不能装 Command Code 账号。 */

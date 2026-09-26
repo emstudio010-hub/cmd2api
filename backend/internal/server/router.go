@@ -49,6 +49,14 @@ func NewRouter(opts Options) *gin.Engine {
 		// 登录本身不能要求已登录。
 		api.POST("/auth/login", h.Login)
 
+		// 浏览器授权的回调也必须在鉴权之外。它是 studio 让浏览器做的顶层
+		// 跳转，浏览器不会给这种跳转带 Authorization 头；身份由发起时生成
+		// 的一次性 state 认，取走即作废。
+		//
+		// 这条路径的 query 里会带一把明文 apiKey，所以它绝不能进访问日志：
+		// accessLog 只记 URL.Path、不记 RawQuery，这里依赖那个前提。
+		api.GET("/accounts/oauth/commandcode/callback", h.AccountOAuthCallback)
+
 		admin := api.Group("")
 		admin.Use(middleware.AdminAuth(opts.Issuer))
 		{
@@ -60,6 +68,8 @@ func NewRouter(opts Options) *gin.Engine {
 			admin.GET("/accounts", h.ListAccounts)
 			admin.POST("/accounts", h.CreateAccount)
 			admin.POST("/accounts/batch", h.BatchImportAccounts)
+			// 发起浏览器授权：返回一个让前端跳过去的地址，账号要等回调才建。
+			admin.POST("/accounts/oauth/commandcode", h.StartAccountOAuth)
 			admin.GET("/accounts/:id", h.GetAccount)
 			admin.PUT("/accounts/:id", h.UpdateAccount)
 			admin.DELETE("/accounts/:id", h.DeleteAccount)

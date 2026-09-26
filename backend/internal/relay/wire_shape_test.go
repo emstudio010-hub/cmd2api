@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -226,9 +227,25 @@ func TestProtocolVersionIsSemver(t *testing.T) {
 
 // TestInitRequestsShareSessionWithGenerate 确认预请求和生成请求不各说各话。
 func TestInitRequestsShareSessionWithGenerate(t *testing.T) {
+	// 必须加锁：EnsureInitialized 是把指纹和生命周期事件**并发**发出去的
+	// （两个 goroutine），这个 map 会被同时写。不加锁是一个真正的数据竞争，
+	// Go 运行时抓到时直接 fatal error: concurrent map writes —— 而且是偶发的，
+	// 十次里过一次，最难查的那一类。
+	var mu sync.Mutex
 	sessions := map[string]string{}
+	record := func(path, session string) {
+		mu.Lock()
+		sessions[path] = session
+		mu.Unlock()
+	}
+	sessionOf := func(path string) string {
+		mu.Lock()
+		defer mu.Unlock()
+		return sessions[path]
+	}
+
 	client, _ := newBalanceTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		sessions[r.URL.Path] = r.Header.Get("x-session-id")
+		record(r.URL.Path, r.Header.Get("x-session-id"))
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
@@ -240,12 +257,12 @@ func TestInitRequestsShareSessionWithGenerate(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 
-	gen := sessions["/alpha/generate"]
+	gen := sessionOf("/alpha/generate")
 	if gen == "" {
 		t.Fatal("生成请求没有带会话")
 	}
 	for _, path := range []string{"/alpha/fingerprint/record", "/alpha/lifecycle-events"} {
-		if got := sessions[path]; got != gen {
+		if got := sessionOf(path); got != gen {
 			t.Errorf("%s 的会话 %q 与生成请求的 %q 不一致", path, got, gen)
 		}
 	}

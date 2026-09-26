@@ -246,6 +246,15 @@ const oauthCallbackUrl = ref('')
  * 真 → 自动跳回来；假 → 用户从 studio 页面上把密钥抄回来。
  */
 const oauthCallbackIsLoopback = ref(true)
+/**
+ * 这次握手要打开的授权页地址。
+ *
+ * 留着是为了弹窗被拦时能摆一条用户自己点的链接——总得给个出口，但不用
+ * 拿本页跳转去换（那会连表单一起弄丢）。
+ */
+const oauthAuthUrl = ref('')
+/** 新标签页没开出来（被弹窗拦截拦了）。这时才需要那条手动链接。 */
+const oauthTabBlocked = ref(false)
 const oauthError = ref('')
 /** 手动粘贴的内容：一条回调地址，或者一把裸密钥。 */
 const oauthPaste = ref('')
@@ -297,9 +306,9 @@ function finishOAuth(accountName: string): void {
  * 的一切：表单填了一半的内容、滚动位置，回来还得重新找。开新标签页之后，
  * 这个页面靠轮询知道自己该收工了——这也正是 oauthPhase 存在的理由。
  *
- * 新标签页被浏览器拦下时（弹窗拦截），退回整页跳转：那条路仍然能用，只是
- * 结果要靠 studio 跳回账号页时带回来的 ?oauth= 来呈现，用户体验差一档，
- * 但不至于卡死。
+ * 弹窗真被拦下时**不**跳转本页（见 openAuthTab）：本页一跳，用户填了一半的
+ * 表单就没了，而这条链路本来就有别的办法收尾。改成在面板里摆一条能点的链接，
+ * 让用户自己决定。
  */
 async function startOAuth(): Promise<void> {
   if (!validWithoutKey.value || oauthLoading.value) return
@@ -312,38 +321,45 @@ async function startOAuth(): Promise<void> {
     const result = await accountsApi.startOAuth(oauthFields())
     oauthState.value = result.state
     oauthCallbackUrl.value = result.callback_url
+    oauthAuthUrl.value = result.auth_url
     oauthCallbackIsLoopback.value = result.callback_is_loopback !== false
     oauthPaste.value = ''
 
-    if (!oauthCallbackIsLoopback.value) {
-      // 面板不在本机：studio 那一下 POST 是打到用户自己机器的回环地址上的，
-      // 我们收不到。所以这趟是「抄回来」而不是「跳回来」——studio 在打空之后
-      // 会自己跳到一页把密钥显示出来让用户复制，用户粘回下面那个框。
-      //
-      // 标签页照样要开：授权页本身是能正常进的（后端已经把一个 studio 认得的
-      // localhost 回调递了过去），只是收尾那一步换了个方式。
-      oauthPhase.value = 'copyback'
-      const copyTab = window.open(result.auth_url, '_blank', 'noopener')
-      if (!copyTab) {
-        window.location.assign(result.auth_url)
-      }
-      return
+    oauthTabBlocked.value = !openAuthTab(result.auth_url)
+    // 面板不在本机时是「抄回来」而不是「跳回来」：studio 那一下 POST 打到
+    // 用户自己机器的回环地址上，我们收不到，它会退回到自己那页把密钥显示
+    // 出来让用户复制。这种情况不能轮询——那条回调永远不会到。
+    oauthPhase.value = oauthCallbackIsLoopback.value ? 'waiting' : 'copyback'
+    if (oauthCallbackIsLoopback.value) {
+      startOAuthPolling()
     }
-
-    const opened = window.open(result.auth_url, '_blank', 'noopener')
-    if (!opened) {
-      // 被拦了。整页跳走是下策，但比什么都不做要好。
-      window.location.assign(result.auth_url)
-      return
-    }
-
-    oauthPhase.value = 'waiting'
-    startOAuthPolling()
   } catch (err) {
     serverError.value = toMessage(err, '发起浏览器授权失败')
   } finally {
     oauthLoading.value = false
   }
+}
+
+/**
+ * 在新标签页里打开授权页，返回「是不是真开出来了」。
+ *
+ * **不要在 features 里写 noopener。** 按规范，带上 noopener 的 window.open
+ * 一律返回 null——开的照开，就是不给你 handle。而 null 和「弹窗被拦了」长得
+ * 一模一样，于是调用方每次都会误判成被拦，去走那条整页跳转的兜底：结果是
+ * 新标签页开了、当前页面也跳走了，用户填了一半的表单跟着没。这是实测撞到的。
+ *
+ * 该有的隔离换个写法：拿到 handle 之后**立刻**掐断 opener，效果和 noopener
+ * 一样，但 handle 还在，能分清到底开没开成。
+ */
+function openAuthTab(url: string): boolean {
+  const tab = window.open(url, '_blank')
+  if (!tab) return false
+  try {
+    tab.opener = null
+  } catch {
+    // 掐不断也认了：那只是让目标页能反过来操作本页，不影响这趟授权能不能走完。
+  }
+  return true
 }
 
 /**
@@ -437,6 +453,8 @@ function cancelOAuth(): void {
   oauthPhase.value = 'idle'
   oauthError.value = ''
   oauthPaste.value = ''
+  oauthAuthUrl.value = ''
+  oauthTabBlocked.value = false
 }
 
 async function submit(): Promise<void> {
@@ -581,7 +599,7 @@ async function submit(): Promise<void> {
                 用浏览器登录
               </Button>
               <span class="text-2xs text-subtle">
-                在新标签页里登录，回来后自动建号
+                在新标签页里登录授权，这一页不会跳走
               </span>
             </div>
 
@@ -602,7 +620,7 @@ async function submit(): Promise<void> {
                 <Icon name="external" :size="13" class="mt-0.5 shrink-0 text-accent" />
                 <div class="min-w-0 flex-1">
                   <p class="text-2xs font-medium text-fg">
-                    已在新标签页打开登录页
+                    {{ oauthTabBlocked ? '登录页没能自动打开' : '已在新标签页打开登录页' }}
                   </p>
                   <p class="mt-0.5 text-2xs leading-relaxed text-subtle">
                     面板不在你本机上，Command Code 没法把结果直接交回来
@@ -610,11 +628,22 @@ async function submit(): Promise<void> {
                     <code class="font-mono">localhost</code> 的回调）。所以最后
                     一步得你搭把手：
                   </p>
+                  <p v-if="oauthTabBlocked" class="mt-1.5 text-2xs leading-relaxed text-subtle">
+                    浏览器拦下了新标签页，点
+                    <a
+                      :href="oauthAuthUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-accent underline underline-offset-2"
+                    >这里手动打开登录页</a
+                    >。这一页不会跳走，你填的东西都还在。
+                  </p>
                 </div>
               </div>
 
               <ol class="ml-4 list-decimal space-y-1.5 text-2xs leading-relaxed text-subtle">
-                <li>在新标签页里登录并授权。</li>
+                <li v-if="!oauthTabBlocked">在新标签页里登录并授权。</li>
+                <li v-else>在上面那条链接里登录并授权。</li>
                 <li>
                   完事后 Command Code 会显示一页
                   <strong class="font-medium text-muted">「Copy your API key」</strong>，
@@ -670,10 +699,26 @@ async function submit(): Promise<void> {
                 <Icon v-else name="alertCircle" :size="13" class="mt-0.5 shrink-0 text-danger" />
                 <div class="min-w-0 flex-1">
                   <p class="text-2xs font-medium text-fg">
-                    {{ oauthError ? '这次授权没成' : '已在新标签页打开登录页' }}
+                    {{
+                      oauthError
+                        ? '这次授权没成'
+                        : oauthTabBlocked
+                          ? '登录页没能自动打开'
+                          : '已在新标签页打开登录页'
+                    }}
                   </p>
                   <p class="mt-0.5 text-2xs leading-relaxed text-subtle">
                     <template v-if="oauthError">{{ oauthError }}</template>
+                    <template v-else-if="oauthTabBlocked">
+                      浏览器拦下了新标签页，点
+                      <a
+                        :href="oauthAuthUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="text-accent underline underline-offset-2"
+                      >这里手动打开登录页</a
+                      >。这一页不会跳走，你填的东西都还在。
+                    </template>
                     <template v-else>
                       登录完成后这个窗口会自己发现并建号，不用手动刷新。
                     </template>

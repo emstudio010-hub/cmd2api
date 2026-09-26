@@ -1,0 +1,29 @@
+# 本地配置与密钥 —— 绝不入库
+.env
+.env.local
+*.env
+
+# 参考用的上游仓库（只用于对照协议，不属于本项目）
+ref/
+
+# Go
+backend/cmd2api
+backend/cmd2api.exe
+*.test
+*.out
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo
+
+# 备份文件
+*.sql.gz
+*.sql
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

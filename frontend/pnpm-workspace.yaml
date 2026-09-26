@@ -1,0 +1,5 @@
+# pnpm 10/11 起把安装设置从 package.json 的 "pnpm" 字段挪到了这里。
+# esbuild 需要跑安装脚本来校验平台原生二进制，默认被拦，这里显式放行，
+# 否则 pnpm 会在 install / run 时报 ERR_PNPM_IGNORED_BUILDS。
+allowBuilds:
+  esbuild: true

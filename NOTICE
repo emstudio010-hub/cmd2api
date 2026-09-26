@@ -1,0 +1,79 @@
+cmd2api — 来源与许可证说明
+================================================================
+
+cmd2api 是一个新项目，但它的数据模型设计与上游协议实现移植自两个开源项目。
+按许可证要求，这里说明每一部分的来源。
+
+本项目整体以 GNU LGPL-3.0 发布（见 LICENSE），原因见下面的第 1 条。
+
+
+1. 移植自 sub2api —— GNU LGPL-3.0
+----------------------------------------------------------------
+
+上游项目：https://github.com/Wei-Shaw/sub2api
+许可证：  GNU Lesser General Public License v3.0
+          完整文本见 licenses/LICENSE-sub2api-LGPL-3.0.txt
+
+本项目从中移植了**数据模型设计与若干 schema 定义**，具体包括：
+
+  backend/ent/schema/account.go        账号表结构、调度状态机字段
+  backend/ent/schema/api_key.go        下游密钥表结构、额度字段
+  backend/ent/schema/user.go           用户表结构
+  backend/ent/schema/group.go          分组表结构
+  backend/ent/schema/usage_log.go      用量日志表结构、token 与成本字段
+  backend/ent/schema/account_group.go  M2M 边表（复合主键写法）
+  backend/ent/schema/mixins/time.go    created_at / updated_at 混入
+  backend/ent/schema/mixins/soft_delete.go
+  backend/internal/domain/constants.go 状态/角色常量取值
+
+另外，以下部分的**设计思路**参考了 sub2api（代码为重新编写）：
+
+  - 账号池 + 分组 + API Key 的三层模型
+  - 账号调度状态机（schedulable / rate_limit_reset_at / overload_until）
+  - 倍率计费的口径（分组倍率 × 账号倍率）
+
+由于上述内容派生自 LGPL-3.0 代码，本项目整体采用 LGPL-3.0 发布。
+这不是可选项：派生于 LGPL 代码的部分必须以同样许可证分发。
+
+sub2api 的原始版权归其作者所有。本项目与 sub2api 项目及其开发者无隶属关系，
+也未经其背书。
+
+
+2. 移植自 commandcode-proxy —— MIT
+----------------------------------------------------------------
+
+上游项目：https://github.com/MAXeaglet/commandcode-proxy
+版权：    Copyright (c) 2026 MAXeaglet
+许可证：  MIT License
+          完整文本见 licenses/LICENSE-commandcode-proxy-MIT.txt
+
+本项目的上游协议实现是对该项目的 **Go 语言重新实现**，移植内容包括：
+
+  backend/internal/relay/fingerprint.go  设备指纹派生算法
+  backend/internal/relay/client.go       会话/预请求/上游端点调用
+  backend/internal/relay/envelope.go     请求信封构造与工具名映射
+  backend/internal/relay/openai_out.go   上游 NDJSON → OpenAI SSE 翻译
+  backend/internal/relay/anthropic_out.go 上游 NDJSON → Anthropic SSE 翻译
+  backend/internal/relay/anthropic_in.go  Anthropic 请求 → 中间表示
+  backend/internal/relay/errors.go       上游错误状态码映射
+  backend/internal/relay/health.go       账号探活
+  backend/internal/relay/types.go        上游事件与用量结构
+
+这些移植部分同样受 MIT 许可证保护，其原始版权声明保留在上述许可证文件中。
+
+
+3. 其余部分
+----------------------------------------------------------------
+
+除上述两处外，本项目的代码为新编写，包括 HTTP 接口层、业务服务层、
+调度器、并发闸门、前端界面与部署配置。
+
+
+4. 免责声明
+----------------------------------------------------------------
+
+- 本项目仅用于技术学习与研究。
+- 使用本项目可能违反 Command Code、Anthropic、OpenAI 或其他上游服务商的
+  服务条款。请在使用前自行阅读相关协议，由此产生的风险由使用者自行承担。
+- 作者不对账号封禁、服务中断、数据丢失或任何其他直接/间接损失负责。
+- 请遵守你所在国家或地区的法律法规。

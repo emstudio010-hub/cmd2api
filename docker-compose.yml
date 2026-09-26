@@ -1,0 +1,99 @@
+# cmd2api 一体化部署。
+#
+# 两个服务：Postgres 存数据，cmd2api 跑后端 + 前端。
+# 没有 Redis——并发闸门和会话状态都在进程内存里，单实例部署用不着它。
+#
+# 启动前：cp .env.example .env 并填好 ENCRYPTION_KEY / JWT_SECRET / DB_PASSWORD /
+# BOOTSTRAP_ADMIN_PASSWORD，然后 `docker compose up -d`。
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cmd2api-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-cmd2api}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 必须设置}
+      POSTGRES_DB: ${DB_NAME:-cmd2api}
+      # 用 scram 而不是 trust：容器网络里也不该允许无密码连接。
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # 带上用户名：不指定时 pg_isready 会拿默认用户去连，在非默认用户名下会误报不健康。
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cmd2api} -d ${DB_NAME:-cmd2api}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # 不对外暴露端口：数据库只在 compose 网络内可达。
+    # 需要本地连进去排查时，临时用 `docker compose exec postgres psql -U cmd2api`。
+    networks:
+      - cmd2api
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cmd2api:latest
+    container_name: cmd2api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "8080"
+      GIN_MODE: release
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TZ: ${TZ:-Asia/Shanghai}
+
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-cmd2api}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 必须设置}
+      DB_NAME: ${DB_NAME:-cmd2api}
+      DB_SSLMODE: disable
+
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET 必须设置}
+      JWT_TTL: ${JWT_TTL:-24h}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY 必须设置}
+
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@cmd2api.local}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?BOOTSTRAP_ADMIN_PASSWORD 必须设置}
+
+      # ---- Command Code 上游 ----
+      CC_API_BASE: ${CC_API_BASE:-https://api.commandcode.ai}
+      # 留空则直连。国内服务器通常需要填代理才能连上上游。
+      CC_UPSTREAM_PROXY: ${CC_UPSTREAM_PROXY:-}
+      # 改这个值等于让所有账号一起换设备。只在需要整体重置身份时改。
+      CC_FINGERPRINT_SALT: ${CC_FINGERPRINT_SALT:-}
+      CC_EMPTY_SYSTEM_PLACEHOLDER: ${CC_EMPTY_SYSTEM_PLACEHOLDER:-true}
+      CC_STREAM_IDLE: ${CC_STREAM_IDLE:-30s}
+      CC_NONSTREAM_IDLE: ${CC_NONSTREAM_IDLE:-90s}
+      CC_MAX_BODY_MB: ${CC_MAX_BODY_MB:-100}
+
+      # ---- 健康检查 ----
+      HEALTH_CHECK_ENABLED: ${HEALTH_CHECK_ENABLED:-true}
+      HEALTH_CHECK_INTERVAL: ${HEALTH_CHECK_INTERVAL:-10m}
+      HEALTH_FAILURE_THRESHOLD: ${HEALTH_FAILURE_THRESHOLD:-5}
+    # 让容器能用 host.docker.internal 指向宿主机。Linux 上 Docker 默认
+    # 不提供这个名字，必须显式加这条；Windows/macOS 上加了也无害。
+    # 用途之一：把 CC_UPSTREAM_PROXY 指向跑在宿主机上的代理。
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      # 默认只监听回环：生产环境前面应该放 nginx/caddy 做 TLS。
+      # 想直接对外用就改成 "8080:8080"，但那样流量是明文的。
+      - "${BIND_ADDR:-127.0.0.1}:${HOST_PORT:-8080}:8080"
+    networks:
+      - cmd2api
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  cmd2api:
+    driver: bridge

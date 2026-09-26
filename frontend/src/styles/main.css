@@ -1,0 +1,168 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------
+   主题令牌
+   ------------------------------------------------------------------
+   深色是默认主题，所以 :root 放深色值；浅色通过 .light 覆盖（会同时
+   摘掉 html 上的 dark 类）。变量值写成 "R G B" 通道，好让 Tailwind 的
+   `/10` 透明度修饰符继续生效。
+   ------------------------------------------------------------------ */
+@layer base {
+  :root {
+    color-scheme: dark;
+
+    --c-canvas: 10 12 15;
+    --c-surface: 17 20 24;
+    --c-raised: 23 27 33;
+    --c-overlay: 30 36 44;
+
+    --c-line: 35 42 51;
+    --c-line-strong: 51 61 73;
+
+    --c-fg: 231 235 240;
+    --c-muted: 152 162 179;
+    --c-subtle: 107 118 132;
+
+    --c-accent: 79 140 255;
+    --c-accent-fg: 255 255 255;
+
+    --c-success: 47 191 113;
+    --c-warning: 240 167 44;
+    --c-danger: 242 85 90;
+    --c-info: 56 189 248;
+  }
+
+  html.light {
+    color-scheme: light;
+
+    --c-canvas: 246 247 249;
+    --c-surface: 255 255 255;
+    --c-raised: 242 244 247;
+    --c-overlay: 233 236 241;
+
+    --c-line: 226 230 236;
+    --c-line-strong: 203 210 219;
+
+    --c-fg: 19 24 34;
+    --c-muted: 91 100 114;
+    --c-subtle: 139 149 165;
+
+    --c-accent: 37 99 235;
+    --c-accent-fg: 255 255 255;
+
+    --c-success: 18 137 74;
+    --c-warning: 176 82 9;
+    --c-danger: 209 45 32;
+    --c-info: 3 105 161;
+  }
+
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-sm text-fg antialiased;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* 键盘可达性：鼠标点击不显示焦点环，Tab 导航必须显示。 */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-canvas;
+  }
+
+  /* 数字列对齐用，避免表格里数字宽度跳动。 */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* 表头 / 单元格。表格是本后台最高频的界面元素，把密度集中定义在这里，
+     比在每个视图里重复一长串 class 更可靠。 */
+  .th {
+    @apply whitespace-nowrap px-3 py-2 text-left text-2xs font-semibold uppercase tracking-wider text-subtle;
+  }
+
+  .td {
+    @apply whitespace-nowrap px-3 py-2 align-middle text-[13px] text-fg;
+  }
+
+  .card {
+    @apply rounded-panel border border-line bg-surface;
+  }
+
+  /* 表单控件共享的底座，Input/Select/Textarea 都基于它。 */
+  .field {
+    @apply w-full rounded-md border border-line bg-raised px-2.5 py-1.5 text-[13px] text-fg
+      placeholder:text-subtle transition
+      focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .field-sm {
+    @apply px-2 py-1 text-xs;
+  }
+
+  /* 细滚动条：表格横向滚动容器用，默认滚动条在深色下太抢眼。 */
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--c-line-strong)) transparent;
+  }
+
+  .scroll-thin::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+
+  .scroll-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scroll-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--c-line-strong));
+    border-radius: 9999px;
+  }
+
+  .scroll-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--c-subtle));
+  }
+}
+
+/* 路由与列表的过渡。保持很短——操作台里动画只是为了避免突兀。 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 140ms ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.pop-enter-active,
+.pop-leave-active {
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.pop-enter-from,
+.pop-leave-to {
+  opacity: 0;
+  transform: translateY(4px) scale(0.98);
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 180ms ease;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  transform: translateX(-100%);
+}

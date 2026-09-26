@@ -1,0 +1,25 @@
+# 统一换行符：仓库里一律存 LF，检出时按平台转换。
+# 不加这个的话，Windows 上提交会把整个仓库变成 CRLF，
+# 其他人克隆后 git status 全是"已修改"，diff 也没法看。
+* text=auto eol=lf
+
+# 二进制文件不要做换行转换，否则会被改坏。
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text eol=lf
+*.woff binary
+*.woff2 binary
+
+# Go 源码永远 LF。
+*.go text eol=lf
+
+# 锁定文件不要合并冲突时自动解决——生成物冲突应该重新生成而不是手工合并。
+pnpm-lock.yaml -merge
+go.sum -merge
+
+# 让 GitHub 的语言统计别把生成代码算进去。
+backend/ent/** linguist-generated=true
+frontend/pnpm-lock.yaml linguist-generated=true

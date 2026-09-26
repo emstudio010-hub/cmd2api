@@ -251,6 +251,28 @@ Postgres 容器还没就绪，或者 `DB_PASSWORD` 与 Postgres 初始化时用�
 **客户端能连上但回答很慢、要等很久才出第一个字**
 nginx 的 `proxy_buffering` 没关。见第 6 节。
 
+**容器一直显示 unhealthy，但 `curl http://127.0.0.1:8080/health` 是正常的**
+说明健康检查命令被代理环境变量带偏了。Docker Desktop（Windows/macOS）会给每个容器注入
+`HTTP_PROXY=http://127.0.0.1:7890` 之类的变量，而那个代理跑在宿主机上、容器里并不存在，
+busybox 的 `wget` 又只认这个变量、不看 `no_proxy`，于是连「探测容器自己」都会被送去
+那个不存在的代理。
+
+本项目的 Dockerfile 里已经在探针命令前清空了这些变量，所以正常不会遇到。如果你自己改了
+探针，记得保留 `http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY=` 这个前缀。
+
+**容器连不上上游（超时 / connection refused）**
+先确认是不是被同样的代理变量误导了：容器里的 `127.0.0.1` 指的是容器自己，不是宿主机。
+如果你的网络确实需要走代理才能访问上游，把代理地址填到 `CC_UPSTREAM_PROXY`：
+
+```bash
+# .env
+# 指向宿主机上的代理（compose 已经配好 host.docker.internal 的映射）
+CC_UPSTREAM_PROXY=http://host.docker.internal:7890
+```
+
+只支持 `http://` / `https://` 代理。填错的话服务会在启动时直接报错并指出问题，不会带着
+坏配置跑起来。
+
 **`/v1/messages` 报 503「分组内没有可用账号」**
 分组里没有账号，或者账号都被禁用了。去后台看一下账号状态和最近一次探活结果。
 

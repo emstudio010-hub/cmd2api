@@ -611,6 +611,13 @@ async function submit(): Promise<void> {
                   <span class="block font-mono text-subtle">
                     ssh -L 8080:127.0.0.1:8080 用户名@服务器地址
                   </span>
+                  <span class="block">
+                    本地 8080 被别的东西占着（比如你自己也跑着一个 cmd2api）就换个
+                    端口：<code class="font-mono">-L 18080:127.0.0.1:8080</code>，
+                    然后开
+                    <code class="font-mono">http://127.0.0.1:18080</code>。
+                    端口是几都行，只要是 127.0.0.1 就打得到。
+                  </span>
                 </li>
                 <li>
                   <strong class="font-medium text-muted">直接粘一把密钥</strong>：去

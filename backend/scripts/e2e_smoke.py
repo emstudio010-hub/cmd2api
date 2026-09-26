@@ -366,6 +366,118 @@ check(u"失败时回跳地址里带上原因",
       u"授权链接已失效" in urllib.parse.unquote(location), location)
 check(u"回跳地址里不带密钥", u"apiKey" not in location and u"user_" not in location, location)
 
+# ---- 授权结果的两种收尾方式 ----
+#
+# 自动那条（回调）在上面验过了。这里验的是「另一个标签页问好了没」和
+# 「用户手动把回调地址粘回来」——面板跑在远程服务器上、浏览器跳不回本机时，
+# 这两条是唯一能把授权救回来的路。
+print(u"\n[授权收尾]")
+
+# 重新发起一次，拿到一个真实的 state 用。
+status, body = call("POST", "/api/accounts/oauth/commandcode",
+                    {"name": uniq(u"待收尾"), "group_ids": [cc_group],
+                     "concurrency": 5, "priority": 60}, token=token)
+oauth_state = body.get("state", "") if status == 200 else ""
+check(u"发起授权会回传 state（轮询要用）", bool(oauth_state), body)
+# 要比的是**这一次**授权地址里的 state。上面那个 query 是第一次发起时解析的，
+# 拿它来比必然不等——每次发起都是新的 state。
+this_query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(body.get("auth_url", "")).query))
+check(u"state 与本次授权地址里的那一个一致",
+      oauth_state and oauth_state == this_query.get("state"),
+      (oauth_state, this_query.get("state")))
+callback_url = body.get("callback_url", "")
+check(u"回传的回调地址是绝对地址",
+      callback_url.startswith("http") and callback_url.endswith(
+          "/api/accounts/oauth/commandcode/callback"), callback_url)
+
+status, body = call("GET", "/api/accounts/oauth/commandcode/status?state=" + oauth_state,
+                    token=token)
+check(u"刚发起时状态是等待中",
+      status == 200 and body.get("status") == "pending", (status, body))
+
+status, body = call("GET", "/api/accounts/oauth/commandcode/status?state=" + u"n" * 43,
+                    token=token)
+check(u"未知 state 报已失效（前端据此停止轮询）",
+      status == 200 and body.get("status") == "gone", (status, body))
+
+# 这两条是面板自己发的 XHR，必须在鉴权之内：放到鉴权之外就等于开出一个
+# 用别人的 state 建账号的口子——state 会出现在浏览器地址栏里。
+status, _ = call("GET", "/api/accounts/oauth/commandcode/status?state=" + oauth_state)
+check(u"状态查询要求登录", status == 401, status)
+status, _ = call("POST", "/api/accounts/oauth/commandcode/complete",
+                 {"result": "user_x", "state": oauth_state})
+check(u"手动收尾要求登录", status == 401, status)
+
+# 粘错东西时要报人话。最容易粘错的是**授权页**地址：它 query 里也有
+# callback 和 state，看着很像，但没有 apiKey。
+status, body = call("POST", "/api/accounts/oauth/commandcode/complete",
+                    {"result": auth_url, "state": oauth_state}, token=token)
+check(u"粘授权页地址时给出可读的提示",
+      status == 400 and u"授权页" in body.get("error", ""), (status, body))
+
+status, body = call("POST", "/api/accounts/oauth/commandcode/complete",
+                    {"result": "https://panel.example.com/accounts"}, token=token)
+check(u"粘面板地址时也能认出不是回调地址",
+      status == 400 and u"apiKey" in body.get("error", ""), (status, body))
+
+# 拿一个假密钥走完整条手动流程：解析要对、要走 upstream 校验、要失败得
+# 干净（这里环境无外网，whoami 必然失败——但**失败的方式**是重点：
+# 得是「密钥没能通过校验」，而不是 500 或者 panic）。
+status, body = call("POST", "/api/accounts/oauth/commandcode/complete",
+                    {"result": callback_url + "?apiKey=user_smoke_fake_key&state=" + oauth_state,
+                     "state": oauth_state},
+                    token=token)
+check(u"手动粘贴走完解析并尝试校验密钥（失败也应是 4xx 而不是 500）",
+      status == 400, (status, body))
+# 这是实测出来的问题：上游回的是一段 JSON，整段透出去用户看到的是一串
+# 被截断的 {"success":false,... }，一句都读不懂。提示里必须是话，不是响应体。
+_msg = body.get("error", "")
+check(u"校验失败的提示是人话，不是上游的响应体",
+      u"{" not in _msg and u"success" not in _msg and len(_msg) > 8, _msg)
+check(u"校验失败时账号没有建出来",
+      call("GET", "/api/accounts?platform=commandcode&keyword="
+           + urllib.parse.quote(u"待收尾-" + RUN_ID), token=token)[1].get("total") == 0, None)
+
+# ---- 登录用户名与密码 ----
+print(u"\n[登录用户名]")
+status, body = call("PUT", "/api/auth/profile",
+                    {"current_password": "definitely-wrong", "email": "someone@else.com"},
+                    token=token)
+check(u"改用户名需要当前密码", status == 400, (status, body))
+
+status, body = call("PUT", "/api/auth/profile",
+                    {"current_password": PASSWORD, "email": "not-an-email"}, token=token)
+check(u"拒绝不成形的邮箱", status == 400, (status, body))
+
+status, body = call("PUT", "/api/auth/profile",
+                    {"current_password": PASSWORD, "email": EMAIL}, token=token)
+check(u"改成当前用户名不报错（幂等，不写库）",
+      status == 200 and "user" in body and body["user"]["email"] == EMAIL, (status, body))
+
+# 真的改一次再改回来：这条路径要动库，不真跑一遍等于没测。
+alt_email = "smoke-" + RUN_ID + "@cmd2api.local"
+status, body = call("PUT", "/api/auth/profile",
+                    {"current_password": PASSWORD, "email": alt_email}, token=token)
+check(u"改登录用户名成功", status == 200 and body.get("user", {}).get("email") == alt_email,
+      (status, body))
+new_token = body.get("token", "")
+check(u"改完发回一把新令牌（邮箱写在 JWT 声明里）", bool(new_token), None)
+
+status, body = call("GET", "/api/auth/me", token=new_token)
+check(u"新令牌可用且带着新用户名",
+      status == 200 and body.get("user", {}).get("email") == alt_email, (status, body))
+
+status, body = call("POST", "/api/auth/login",
+                    {"email": alt_email, "password": PASSWORD})
+check(u"可以用新用户名登录", status == 200 and "token" in body, (status, body))
+
+# 改回去，别把这个实例的用户名留在测试值上。
+status, body = call("PUT", "/api/auth/profile",
+                    {"current_password": PASSWORD, "email": EMAIL}, token=new_token)
+check(u"改回原用户名", status == 200 and body.get("user", {}).get("email") == EMAIL,
+      (status, body))
+token = body.get("token", token)
+
 # ---- API Key ----
 print(u"\n[API Key]")
 status, k1 = call("POST", "/api/keys",

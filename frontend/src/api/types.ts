@@ -250,6 +250,51 @@ export interface StartAccountOAuthResult {
   callback_url: string
   /** 这次握手的失效时间。 */
   expires_at: string
+  /** 这次握手的标识。拿来轮询「授权好了没」，也用于手动收尾时对上表单字段。 */
+  state: string
+}
+
+/**
+ * 一次握手的当前状态。
+ *
+ * `gone` 是必须单独拿出来的一种：它表示这次握手不存在或已过期。前端收到它
+ * 要停止轮询并提示重新发起——只回 `pending` 的话，用户会对着一个永远不动的
+ * 转圈一直等下去。
+ */
+export type AccountOAuthStatus =
+  | { status: 'pending' }
+  | { status: 'ok'; account_id: number; name: string }
+  | { status: 'error'; message: string }
+  | { status: 'gone'; message: string }
+
+/**
+ * 手动收尾的入参。
+ *
+ * 用在浏览器跳不回本机的场景（面板跑在远程服务器上）：用户把地址栏里那条
+ * 打不开的回调地址粘回来，后端从中取出密钥建号。
+ *
+ * `result` 既可以是整条回调地址，也可以只是一把裸密钥。
+ */
+export interface CompleteAccountOAuthPayload {
+  result: string
+  /** 发起时的握手标识，用来沿用后端存好的那份表单字段。 */
+  state?: string
+  /** 后端认不出 state 时的兜底字段。 */
+  name?: string
+  notes?: string
+  concurrency?: number
+  priority?: number
+  rate_multiplier?: number
+  group_ids?: number[]
+  expires_at?: string | null
+}
+
+export interface EmailChangeResponse {
+  message: string
+  /** 换登录用户名会连带换一把令牌（邮箱写在声明里），这里返回新的。 */
+  token: string
+  expires_at: string
+  user: AdminUser
 }
 
 export interface BatchImportPayload {

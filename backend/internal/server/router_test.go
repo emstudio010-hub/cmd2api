@@ -27,23 +27,80 @@ func newTestRouter(t *testing.T) *gin.Engine {
 	return NewRouter(Options{Handler: h, Mode: "release"})
 }
 
+// TestNewRouterRegistersOAuthRoutes 确认这一组路由都在，而且方法对得上。
+//
+// 顺带盯住 gin 的建树：静态段（oauth）和参数段（:id）在 /accounts/ 这一层
+// 是兄弟节点，注册冲突时 gin 会 panic。这种错编译期看不出来，只有进程启动
+// 时才炸，所以值得有一条测试把整棵树建起来。
 func TestNewRouterRegistersOAuthRoutes(t *testing.T) {
 	r := newTestRouter(t)
 
-	var hasStart, hasCallback bool
+	want := map[string]string{
+		"/api/accounts/oauth/commandcode":          http.MethodPost,
+		"/api/accounts/oauth/commandcode/callback": http.MethodGet,
+		"/api/accounts/oauth/commandcode/status":   http.MethodGet,
+		"/api/accounts/oauth/commandcode/complete": http.MethodPost,
+		"/api/auth/profile":                        http.MethodPut,
+	}
+	got := make(map[string]string)
 	for _, route := range r.Routes() {
-		switch route.Path {
-		case "/api/accounts/oauth/commandcode":
-			hasStart = route.Method == http.MethodPost
-		case "/api/accounts/oauth/commandcode/callback":
-			hasCallback = route.Method == http.MethodGet
+		if _, ok := want[route.Path]; ok {
+			got[route.Path] = route.Method
 		}
 	}
-	if !hasStart {
-		t.Error("缺少发起授权的路由 POST /api/accounts/oauth/commandcode")
+	for path, method := range want {
+		switch got[path] {
+		case "":
+			t.Errorf("缺少路由 %s %s", method, path)
+		case method:
+		default:
+			t.Errorf("%s 的方法应当是 %s，实际 %s", path, method, got[path])
+		}
 	}
-	if !hasCallback {
-		t.Error("缺少授权的回调路由 GET /api/accounts/oauth/commandcode/callback")
+}
+
+// TestOAuthStatusAndCompleteRequireAuth 确认「问好了没」和「手动收尾」
+// 都在鉴权之内。
+//
+// 回调那条路必须在鉴权之外（浏览器跳转带不了头），这两条不用——它们是
+// 面板自己发的 XHR。把它们也放到鉴权之外，等于开出一个可以用别人的 state
+// 去建账号的口子：state 会出现在浏览器地址栏和历史记录里，抢到它的人就能
+// 拿自己的密钥在这台机器上建号。
+func TestOAuthStatusAndCompleteRequireAuth(t *testing.T) {
+	r := newTestRouter(t)
+
+	reqs := []*http.Request{
+		httptest.NewRequest(http.MethodGet,
+			"/api/accounts/oauth/commandcode/status?state=whatever", nil),
+		httptest.NewRequest(http.MethodPost,
+			"/api/accounts/oauth/commandcode/complete",
+			strings.NewReader(`{"result":"user_x"}`)),
+	}
+	for _, req := range reqs {
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s 应当要求登录，实际 %d", req.Method, req.URL.Path, w.Code)
+		}
+	}
+}
+
+// TestUpdateEmailRequiresAuth 确认改登录用户名要登录。
+//
+// 这条改的是登录入口本身，不是某个业务数据。放到鉴权之外等于谁都能把
+// 管理员邮箱改成自己的。
+func TestUpdateEmailRequiresAuth(t *testing.T) {
+	r := newTestRouter(t)
+
+	req := httptest.NewRequest(http.MethodPut, "/api/auth/profile",
+		strings.NewReader(`{"current_password":"x","email":"a@b.com"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("期望 401，实际 %d", w.Code)
 	}
 }
 

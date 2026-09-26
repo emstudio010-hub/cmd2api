@@ -62,6 +62,7 @@ func NewRouter(opts Options) *gin.Engine {
 		{
 			admin.GET("/auth/me", h.Me)
 			admin.POST("/auth/password", h.ChangePassword)
+			admin.PUT("/auth/profile", h.UpdateEmail)
 
 			admin.GET("/dashboard", h.Dashboard)
 
@@ -70,6 +71,11 @@ func NewRouter(opts Options) *gin.Engine {
 			admin.POST("/accounts/batch", h.BatchImportAccounts)
 			// 发起浏览器授权：返回一个让前端跳过去的地址，账号要等回调才建。
 			admin.POST("/accounts/oauth/commandcode", h.StartAccountOAuth)
+			// 「好了没」——授权在另一个标签页里完成，这个页面靠轮询知道结果。
+			admin.GET("/accounts/oauth/commandcode/status", h.AccountOAuthStatus)
+			// 浏览器跳不回本机时（面板在远程服务器上）的兜底：用户把地址栏
+			// 里那条回调地址粘回来，一样把账号建出来。
+			admin.POST("/accounts/oauth/commandcode/complete", h.CompleteAccountOAuth)
 			admin.GET("/accounts/:id", h.GetAccount)
 			admin.PUT("/accounts/:id", h.UpdateAccount)
 			admin.DELETE("/accounts/:id", h.DeleteAccount)

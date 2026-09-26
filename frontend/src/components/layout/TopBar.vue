@@ -9,6 +9,7 @@ import Icon from '@/components/ui/Icon.vue'
 const emit = defineEmits<{
   (event: 'toggle-sidebar'): void
   (event: 'change-password'): void
+  (event: 'change-email'): void
   (event: 'logout'): void
 }>()
 
@@ -42,6 +43,7 @@ const subtitle = computed(() => route.meta.subtitle ?? '')
       <ThemeToggle />
       <AccountMenu
         @change-password="emit('change-password')"
+        @change-email="emit('change-email')"
         @logout="emit('logout')"
       />
     </div>

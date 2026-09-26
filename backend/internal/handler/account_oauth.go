@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -11,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"cmd2api/ent"
 	"cmd2api/internal/domain"
 	"cmd2api/internal/middleware"
 	"cmd2api/internal/relay"
@@ -24,6 +27,12 @@ import (
 // 十分钟：够人在浏览器里登录完，又不至于把窗口留得太久——state 是这条链路
 // 上唯一的凭证，它活着多久，就有一个多久的空窗期。
 const oauthStateTTL = 10 * time.Minute
+
+// oauthOutcomeTTL 是一次握手的**结果**留给面板轮询的时间。
+//
+// 比 state 本身的十分钟短得多：这段时间唯一的作用是让发起授权那个标签页
+// 发现「好了」。两分钟还没轮到它看一眼，那它多半已经不在了。
+const oauthOutcomeTTL = 2 * time.Minute
 
 // oauthWhoamiTimeout 是校验密钥那一步的上游超时。
 //
@@ -48,6 +57,21 @@ type oauthPending struct {
 	ExpiresAt time.Time
 }
 
+// oauthOutcome 是一次握手的最终结果。
+//
+// 存在的理由：授权是在**另一个标签页**里完成的，发起授权的那个页面只能靠
+// 问一句「好了没」来知道结果。把它记在这里，那个页面就不用整页跳走、
+// 也不用人肉刷新。
+type oauthOutcome struct {
+	OK bool
+	// AccountID / Name 在 OK 时有效。
+	AccountID int64
+	Name      string
+	// Message 是失败时给用户看的那句话，已经是可以直接显示的措辞。
+	Message string
+	At      time.Time
+}
+
 // oauthStateStore 保存进行中的授权握手。
 //
 // 放内存而不是落库：这是进程内的短命握手，用完即弃。重启丢掉最多让人重点
@@ -58,10 +82,16 @@ type oauthPending struct {
 type oauthStateStore struct {
 	mu    sync.Mutex
 	items map[string]oauthPending
+	// outcomes 按 state 记结果，比 items 多活一小会儿，好让轮询的那个
+	// 标签页赶得上。它不参与认身份，所以单独一张表、单独一套过期。
+	outcomes map[string]oauthOutcome
 }
 
 func newOAuthStateStore() *oauthStateStore {
-	return &oauthStateStore{items: make(map[string]oauthPending)}
+	return &oauthStateStore{
+		items:    make(map[string]oauthPending),
+		outcomes: make(map[string]oauthOutcome),
+	}
 }
 
 // put 记下一次握手，顺手清掉过期的。
@@ -75,6 +105,11 @@ func (s *oauthStateStore) put(state string, pending oauthPending) {
 	for key, item := range s.items {
 		if now.After(item.ExpiresAt) {
 			delete(s.items, key)
+		}
+	}
+	for key, out := range s.outcomes {
+		if now.Sub(out.At) > oauthOutcomeTTL {
+			delete(s.outcomes, key)
 		}
 	}
 	s.items[state] = pending
@@ -100,6 +135,50 @@ func (s *oauthStateStore) take(state string) (oauthPending, bool) {
 		return oauthPending{}, false
 	}
 	return pending, true
+}
+
+// pending 只看一眼这次握手还在不在，不取走。
+//
+// 给状态查询用：轮询的页面得能区分「还在等」和「这次握手根本不存在（或已
+// 经过期）」，后者再等下去是白等。查询不走 take，否则第一次轮询就会把
+// 回调要用的那份字段吃掉。
+func (s *oauthStateStore) pending(state string) bool {
+	if state == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item, ok := s.items[state]
+	return ok && !time.Now().After(item.ExpiresAt)
+}
+
+// finish 记下一次握手的结果，供发起授权的页面轮询。
+func (s *oauthStateStore) finish(state string, out oauthOutcome) {
+	if state == "" {
+		return
+	}
+	out.At = time.Now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.outcomes[state] = out
+}
+
+// outcome 读一次结果。
+func (s *oauthStateStore) outcome(state string) (oauthOutcome, bool) {
+	if state == "" {
+		return oauthOutcome{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out, ok := s.outcomes[state]
+	if !ok {
+		return oauthOutcome{}, false
+	}
+	if time.Since(out.At) > oauthOutcomeTTL {
+		delete(s.outcomes, state)
+		return oauthOutcome{}, false
+	}
+	return out, true
 }
 
 // newOAuthState 生成一个不可猜的 state。
@@ -184,7 +263,65 @@ func (h *Handler) StartAccountOAuth(c *gin.Context) {
 		"auth_url":     relay.CommandCodeAuthURL(callbackURL, state),
 		"callback_url": callbackURL,
 		"expires_at":   expires.Format(time.RFC3339),
+		// state 回给前端，让它能轮询「好了没」。这不算额外泄漏：它就藏在
+		// auth_url 里，而 auth_url 本来就要交给这个页面去跳转。
+		"state": state,
 	})
+}
+
+// createAccountFromKey 用一把刚拿到的上游密钥把账号建出来。
+//
+// 两条路共用这一个函数：studio 把浏览器跳回回调地址的（自动），和用户把
+// 回调地址粘回来的（手动）。两条路拿到的都是同一种东西——一把普通 API
+// key——所以之后每一步都该一模一样；分开写迟早会分叉出「自动建的账号有
+// 余额、手动建的没有」这种说不清的不一致。
+//
+// 返回的 error 已经是能直接给用户看的中文，调用方原样透出即可。
+func (h *Handler) createAccountFromKey(
+	ctx context.Context,
+	fields service.CreateAccountInput,
+	apiKey string,
+	adminID int64,
+) (*ent.Account, relay.Whoami, error) {
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey == "" {
+		return nil, relay.Whoami{}, errors.New("授权结果里没有密钥，请重试")
+	}
+
+	// 先验一次再建号。宁可让用户看到一句「密钥没能通过校验」，也不要建出
+	// 一个用不了的账号让他在列表里自己发现。
+	verifyCtx, cancel := context.WithTimeout(ctx, oauthWhoamiTimeout)
+	whoami, err := h.accounts.FetchWhoami(verifyCtx, apiKey)
+	cancel()
+	if err != nil {
+		h.logger.Warn("授权回来的密钥校验失败", "admin_id", adminID, "err", err)
+		// 交给 relay 那一层措辞：它知道上游的错误体长什么样。直接 err.Error()
+		// 显示出来的是一段被截断的 JSON，用户看不懂。
+		return nil, relay.Whoami{}, errors.New(relay.DescribeKeyCheckError(err))
+	}
+
+	if fields.Name == "" {
+		// 名称留空时用站上的用户名兜底，别建出一堆「未命名」。
+		fields.Name = firstNonEmpty(whoami.UserName, whoami.Name, "Command Code 账号")
+	}
+	// 这两条由服务端定死：这条路只服务 Command Code，平台的取值不接受外部
+	// 输入；密钥就是上面刚验过的那把。
+	fields.Platform = domain.PlatformCommandCode
+	fields.APIKey = apiKey
+
+	acc, err := h.accounts.Create(ctx, fields)
+	if err != nil {
+		h.logger.Warn("授权建号失败", "admin_id", adminID, "err", err)
+		return nil, relay.Whoami{}, fmt.Errorf("账号创建失败：%s", truncateRunes(err.Error(), 120))
+	}
+
+	// 顺手取一次余额。走的是计费接口，不消耗生成额度，但能让这个新账号
+	// 一出现在列表里就带着余额和套餐——刚点完授权就有东西可看。
+	// 失败无所谓：余额刷不出来不该让整趟授权看起来是失败的。
+	if _, err := h.accounts.RefreshBalance(ctx, acc.ID); err != nil {
+		h.logger.Warn("授权后刷新余额失败", "account_id", acc.ID, "err", err)
+	}
+	return acc, whoami, nil
 }
 
 // AccountOAuthCallback 接收 studio 跳回来的授权结果。
@@ -195,80 +332,193 @@ func (h *Handler) StartAccountOAuth(c *gin.Context) {
 //
 // 它必须待在 AdminAuth 之外，所以注册在 api 组而不是 admin 组里。
 func (h *Handler) AccountOAuthCallback(c *gin.Context) {
-	pending, ok := h.oauthStates.take(c.Query("state"))
+	state := c.Query("state")
+	pending, ok := h.oauthStates.take(state)
 	if !ok {
+		// 这次握手已经被别处收掉了。最可能的场景：用户走了手动粘贴那条路
+		// （浏览器跳不回来），然后原来那个标签页又好巧不巧地跳了回来。
+		// 那不是失败——账号已经建出来了。这里要如实报成功，否则用户会在
+		// 一个标签页里看到「已失效」、在另一个里看到「已创建」，不知道该
+		// 信哪个，多半会再建一个。
+		if out, done := h.oauthStates.outcome(state); done && out.OK {
+			values := url.Values{}
+			values.Set("oauth", "ok")
+			values.Set("id", strconv.FormatInt(out.AccountID, 10))
+			values.Set("name", out.Name)
+			h.oauthRedirect(c, values)
+			return
+		}
 		// 不区分「没这个 state」和「过期了」：对外说一样的话，
 		// 免得把「哪些 state 曾经存在过」这种信息漏出去。
-		h.oauthRedirectError(c, "授权链接已失效，请重新发起")
+		h.oauthFail(c, state, "授权链接已失效，请重新发起")
 		return
 	}
 	if h.accounts == nil {
-		h.oauthRedirectError(c, "账号服务未启用")
+		h.oauthFail(c, state, "账号服务未启用")
 		return
 	}
 
 	// 用户在站上点了拒绝时，studio 会带 error 回来。
 	if code := c.Query("error"); code != "" {
 		if code == "access_denied" {
-			h.oauthRedirectError(c, "已取消授权")
+			h.oauthFail(c, state, "已取消授权")
 			return
 		}
 		desc := strings.TrimSpace(c.Query("error_description"))
 		if desc == "" {
 			desc = code
 		}
-		h.oauthRedirectError(c, "授权失败："+truncateRunes(desc, 120))
-		return
-	}
-
-	apiKey := strings.TrimSpace(c.Query("apiKey"))
-	if apiKey == "" {
-		h.oauthRedirectError(c, "授权结果里没有密钥，请重试")
+		h.oauthFail(c, state, "授权失败："+truncateRunes(desc, 120))
 		return
 	}
 
 	ctx := c.Request.Context()
-
-	// 先验一次再建号。宁可让用户看到一句「密钥没能通过校验」，也不要建出
-	// 一个用不了的账号让他在列表里自己发现。
-	verifyCtx, cancel := context.WithTimeout(ctx, oauthWhoamiTimeout)
-	whoami, err := h.accounts.FetchWhoami(verifyCtx, apiKey)
-	cancel()
+	acc, whoami, err := h.createAccountFromKey(ctx, pending.Fields, c.Query("apiKey"), pending.AdminID)
 	if err != nil {
-		h.logger.Warn("授权回来的密钥校验失败", "admin_id", pending.AdminID, "err", err)
-		h.oauthRedirectError(c, "这把密钥没能通过校验："+truncateRunes(err.Error(), 120))
+		h.oauthFail(c, state, err.Error())
 		return
-	}
-
-	fields := pending.Fields
-	if fields.Name == "" {
-		// 名称留空时用站上的用户名兜底，别建出一堆「未命名」。
-		fields.Name = firstNonEmpty(whoami.UserName, whoami.Name, "Command Code 账号")
-	}
-	fields.APIKey = apiKey
-
-	acc, err := h.accounts.Create(ctx, fields)
-	if err != nil {
-		h.logger.Warn("授权建号失败", "admin_id", pending.AdminID, "err", err)
-		h.oauthRedirectError(c, "账号创建失败："+truncateRunes(err.Error(), 120))
-		return
-	}
-
-	// 顺手取一次余额。走的是计费接口，不消耗生成额度，但能让这个新账号
-	// 一出现在列表里就带着余额和套餐——刚点完授权就有东西可看。
-	// 失败无所谓：余额刷不出来不该让整趟授权看起来是失败的。
-	if _, err := h.accounts.RefreshBalance(ctx, acc.ID); err != nil {
-		h.logger.Warn("授权后刷新余额失败", "account_id", acc.ID, "err", err)
 	}
 
 	h.logger.Info("浏览器授权新建账号成功",
 		"admin_id", pending.AdminID, "account_id", acc.ID, "user_name", whoami.UserName)
+	h.oauthStates.finish(state, oauthOutcome{OK: true, AccountID: acc.ID, Name: acc.Name})
 
 	values := url.Values{}
 	values.Set("oauth", "ok")
 	values.Set("id", strconv.FormatInt(acc.ID, 10))
 	values.Set("name", acc.Name)
 	h.oauthRedirect(c, values)
+}
+
+// ---- 等结果与手动收尾 ----
+
+// AccountOAuthStatus 让发起授权的那个页面问一句「好了没」。
+//
+// 有了它，授权就不必再抢走当前页面：在新标签页里完成登录，这个页面轮询
+// 到结果后自己刷新列表。轮询到「好了」之前，用户填了一半的表单一直还在。
+func (h *Handler) AccountOAuthStatus(c *gin.Context) {
+	state := strings.TrimSpace(c.Query("state"))
+	if state == "" {
+		fail(c, http.StatusBadRequest, "缺少 state")
+		return
+	}
+	if out, ok := h.oauthStates.outcome(state); ok {
+		if out.OK {
+			c.JSON(http.StatusOK, gin.H{
+				"status":     "ok",
+				"account_id": out.AccountID,
+				"name":       out.Name,
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "error", "message": out.Message})
+		return
+	}
+	if h.oauthStates.pending(state) {
+		c.JSON(http.StatusOK, gin.H{"status": "pending"})
+		return
+	}
+	// 既没有结果、也没有握手：要么过期了，要么这个 state 从来不存在。
+	// 前端据此停止轮询并提示重新发起，而不是一直转圈。
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "gone",
+		"message": "这次授权已失效，请重新发起",
+	})
+}
+
+// completeAccountOAuthRequest 是手动收尾的入参。
+type completeAccountOAuthRequest struct {
+	// Result 是用户粘回来的回调地址，或者一把裸密钥。
+	Result string `json:"result" binding:"required"`
+	// State 是发起时后端回的那个握手标识。带上它就能沿用后端存着的那份
+	// 表单字段；丢了也不要紧，下面这几个字段会顶上。
+	State string `json:"state"`
+	// 以下与发起授权时同义，是 state 认不出来时的兜底。
+	Name           string  `json:"name"`
+	Notes          string  `json:"notes"`
+	Concurrency    int     `json:"concurrency"`
+	Priority       int     `json:"priority"`
+	RateMultiplier float64 `json:"rate_multiplier"`
+	GroupIDs       []int64 `json:"group_ids"`
+	ExpiresAt      *string `json:"expires_at"`
+}
+
+// CompleteAccountOAuth 收下用户手动粘回来的授权结果。
+//
+// 走这条路的情形很具体：studio 把浏览器跳回**跑着 cmd2api 的那台机器**上
+// 的回调地址，而如果面板在远程服务器上、浏览器连不回来，那一跳就失败了，
+// 页面停在一个打不开的地址——密钥却正好在那条地址的 query 里。用户把地址栏
+// 内容复制回来，这一趟授权就不算白做（state 是一次性的，redirect 失败了也
+// 不会有人替他去捡）。
+//
+// 这条路径挂 AdminAuth：身份来自登录令牌，不是 state。所以它比回调那条路
+// **更严**，不是更松——能调它的人必须已经登进了面板。
+func (h *Handler) CompleteAccountOAuth(c *gin.Context) {
+	claims, ok := adminClaims(c)
+	if !ok {
+		return
+	}
+	var req completeAccountOAuthRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	if h.accounts == nil {
+		fail(c, http.StatusServiceUnavailable, "账号服务未启用")
+		return
+	}
+
+	parsed, err := relay.ParseCommandCodeCallback(req.Result)
+	if err != nil {
+		fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	// 用户在站上拒了，或者 studio 直接报错。没有密钥可建，别白跑一趟。
+	if parsed.Error != "" {
+		if parsed.Error == "access_denied" {
+			fail(c, http.StatusBadRequest, "已取消授权")
+			return
+		}
+		fail(c, http.StatusBadRequest,
+			"授权失败："+truncateRunes(firstNonEmpty(parsed.ErrorDescription, parsed.Error), 120))
+		return
+	}
+
+	state := firstNonEmpty(req.State, parsed.State)
+
+	// 字段优先用发起时存在后端的那一份：那是用户在表单里认真填过的。
+	// 粘回来的地址里也带 state，所以就算前端没把 state 传回来，这里一样能认。
+	var fields service.CreateAccountInput
+	if pending, found := h.oauthStates.take(state); found {
+		fields = pending.Fields
+	} else {
+		expiresAt, ok := parseOptionalTime(c, req.ExpiresAt)
+		if !ok {
+			return
+		}
+		fields = service.CreateAccountInput{
+			Name:           strings.TrimSpace(req.Name),
+			Notes:          req.Notes,
+			Platform:       domain.PlatformCommandCode,
+			Concurrency:    req.Concurrency,
+			Priority:       req.Priority,
+			RateMultiplier: req.RateMultiplier,
+			GroupIDs:       req.GroupIDs,
+			ExpiresAt:      expiresAt,
+		}
+	}
+
+	acc, whoami, err := h.createAccountFromKey(c.Request.Context(), fields, parsed.APIKey, claims.UserID)
+	if err != nil {
+		// 记下结果：另一个标签页可能正等着这一趟，让它别再转圈。
+		h.oauthStates.finish(state, oauthOutcome{Message: err.Error()})
+		fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	h.oauthStates.finish(state, oauthOutcome{OK: true, AccountID: acc.ID, Name: acc.Name})
+
+	h.logger.Info("手动粘贴回调地址新建账号成功",
+		"admin_id", claims.UserID, "account_id", acc.ID, "user_name", whoami.UserName)
+	c.JSON(http.StatusCreated, h.toAccountDTO(acc))
 }
 
 // oauthCallbackURL 拼出交给 studio 的回调地址。
@@ -317,6 +567,15 @@ func isSaneHost(host string) bool {
 		}
 	}
 	return true
+}
+
+// oauthFail 记下失败原因，再把浏览器送回账号页。
+//
+// 记这一步是给发起授权的那个页面用的：它可能正在另一个标签页里轮询，
+// 光把浏览器跳走，它就只能一直转到超时。
+func (h *Handler) oauthFail(c *gin.Context, state, message string) {
+	h.oauthStates.finish(state, oauthOutcome{Message: message})
+	h.oauthRedirectError(c, message)
 }
 
 // oauthRedirectError 把浏览器送回账号页，并带上一句能看懂的原因。

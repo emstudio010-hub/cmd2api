@@ -747,9 +747,14 @@ func safeRecord(ctx context.Context, r UsageRecorder, rec UsageRecord) (err erro
 	return nil
 }
 
+// truncate 按字符（不是字节）截断。
+//
+// 按字节切会把多字节字符劈成两半，产生非法 UTF-8——上游的报错和流式输出
+// 里中文不少，切出来的乱码会一路进日志和界面。
 func truncate(s string, n int) string {
-	if len(s) <= n {
+	runes := []rune(s)
+	if len(runes) <= n {
 		return s
 	}
-	return s[:n]
+	return string(runes[:n])
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"strings"
 )
 
 // commandCodeStudioBaseURL 是 Command Code 网站（他们内部叫 studio）的地址。
@@ -33,6 +34,87 @@ func CommandCodeAuthURL(callbackURL, state string) string {
 	// POST JSON 那条老路径，那条要配合 CORS 响应头，对浏览器直连更麻烦。
 	q.Set("mode", "redirect")
 	return commandCodeStudioBaseURL + "/studio/auth/cli?" + q.Encode()
+}
+
+// CommandCodeCallbackResult 是从一段「回调结果」里解析出来的东西。
+type CommandCodeCallbackResult struct {
+	// APIKey 是 studio 带回来的上游密钥，也就是整趟授权要拿的东西。
+	APIKey string
+	// State 是发起时我们自己塞进去的那个，用来认回是哪一次握手。
+	State string
+	// Error / ErrorDescription 是用户在站上拒绝，或 studio 报错时回来的东西。
+	Error            string
+	ErrorDescription string
+}
+
+// ParseCommandCodeCallback 从用户粘回来的一段东西里取出授权结果。
+//
+// 为什么需要「粘贴」这条路：回调地址是 studio 让浏览器跳回**跑着 cmd2api
+// 的那台机器**的地址。面板跑在远程服务器上、浏览器连不回来的时候，这一跳
+// 会直接失败，页面停在一个打不开的地址上——而密钥就明明白白地在那个地址的
+// query 里。让用户把地址栏里那条 URL 复制回来，比让他去翻开发者工具从网络
+// 请求里找 apiKey 现实得多。
+//
+// 接受三种输入：
+//
+//   - 完整的回调地址（`https://panel.example.com/api/accounts/oauth/...?apiKey=...`）
+//   - 没带 scheme 的地址（`127.0.0.1:8080/api/accounts/oauth/...?apiKey=...`）
+//     ——浏览器地址栏里复制出来常是这个样子
+//   - 一把裸密钥（`user_...`）
+//
+// 所以这里**不去 url.Parse 整串**：第二种情况下 url.Parse 会把
+// 「127.0.0.1:8080」当成 scheme 解析，host 变成空的，query 也就丢了。只在
+// 第一个 '?' 处切开、只解析后半段，上面三种就都能对——因为 studio 的
+// encodeURIComponent 编码过 query，这里解码正是想要的。
+func ParseCommandCodeCallback(raw string) (CommandCodeCallbackResult, error) {
+	raw = strings.TrimSpace(raw)
+	// 从终端或聊天窗口里复制常带上一整行甚至几行，只取第一行。
+	if idx := strings.IndexAny(raw, "\r\n"); idx >= 0 {
+		raw = strings.TrimSpace(raw[:idx])
+	}
+	if raw == "" {
+		return CommandCodeCallbackResult{}, errors.New("请粘贴回调地址或密钥")
+	}
+
+	idx := strings.IndexByte(raw, '?')
+	if idx < 0 {
+		// 没有 query。带路径或者带 scheme 的，那是把别的地址粘进来了——
+		// 报错要指向「该粘哪一条」，不然用户只会反复粘同一个错的东西。
+		if strings.Contains(raw, "://") || strings.Contains(raw, "/") {
+			return CommandCodeCallbackResult{}, errors.New(
+				"这段地址里没有 apiKey。要粘的是浏览器跳转到、但打不开的那个地址栏里的完整 URL，" +
+					"不是授权页地址，也不是面板地址")
+		}
+		// 裸密钥。这里不能顺手 Trim 掉引号，密钥里本来就可能什么都有。
+		return CommandCodeCallbackResult{APIKey: raw}, nil
+	}
+
+	query := raw[idx+1:]
+	// 有些地址带 fragment，它不属于 query。
+	if hash := strings.IndexByte(query, '#'); hash >= 0 {
+		query = query[:hash]
+	}
+	values, err := url.ParseQuery(query)
+	if err != nil {
+		return CommandCodeCallbackResult{}, errors.New("这段地址的查询参数解析不了，检查一下是不是没复制完整")
+	}
+
+	result := CommandCodeCallbackResult{
+		APIKey:           strings.TrimSpace(values.Get("apiKey")),
+		State:            strings.TrimSpace(values.Get("state")),
+		Error:            strings.TrimSpace(values.Get("error")),
+		ErrorDescription: strings.TrimSpace(values.Get("error_description")),
+	}
+	if result.APIKey == "" && result.Error == "" {
+		// 最像的一种粘错：把**授权页**地址粘回来了。它的 query 里有 callback
+		// 和 state，看着很像，但没有 apiKey——用户会以为是我们这边坏了。
+		if values.Get("callback") != "" {
+			return CommandCodeCallbackResult{}, errors.New(
+				"这是授权页的地址，不是跳转后的地址。请先在那个页面完成登录，再把跳转后（打不开的）那条地址粘过来")
+		}
+		return CommandCodeCallbackResult{}, errors.New("这段地址里既没有 apiKey 也没有错误信息，不是回调地址")
+	}
+	return result, nil
 }
 
 // Whoami 是上游返回的账号身份。
@@ -65,4 +147,35 @@ func (c *Client) FetchWhoami(ctx context.Context, apiKey string) (Whoami, error)
 		return Whoami{}, errors.New("上游没有返回账号信息，密钥可能无效")
 	}
 	return Whoami{UserName: raw.User.UserName, Name: raw.User.Name}, nil
+}
+
+// DescribeKeyCheckError 把一次密钥校验的失败转成给用户看的一句话。
+//
+// 放在这一层而不是 handler 里：要读懂上游的错误体（401 和 500 是两种意思、
+// message 藏在哪一层）得知道上游的 wire 形状。handler 只负责把这句话显示
+// 出去，不该也去解析一遍响应体。
+//
+// 返回的字符串可能为空——err 为 nil 时。调用方不该在这个前提下显示任何东西。
+func DescribeKeyCheckError(err error) string {
+	if err == nil {
+		return ""
+	}
+	var statusErr *UpstreamStatusError
+	if errors.As(err, &statusErr) {
+		switch {
+		case statusErr.IsAuthFailure():
+			if statusErr.Message != "" {
+				return "上游不认这把密钥（" + statusErr.Message + "）"
+			}
+			return "上游不认这把密钥，检查一下是不是复制错了或者已经失效"
+		case statusErr.Status >= 500:
+			// 上游自己出毛病。说清楚，别让用户去换一把好密钥。
+			return "上游这会儿出了点问题，稍后再试"
+		case statusErr.Message != "":
+			return "上游拒绝了这次校验（" + statusErr.Message + "）"
+		}
+	}
+	// 连不上、超时这一类。归到「没连上」而不是「密钥不对」——这两件事
+	// 用户该做的动作完全不同。
+	return "校验密钥时没能连上上游：" + truncate(err.Error(), 100)
 }

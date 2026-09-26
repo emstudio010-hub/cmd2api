@@ -4,7 +4,11 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useAuthStore } from '@/stores/auth'
 
-const emit = defineEmits<{ (event: 'change-password'): void; (event: 'logout'): void }>()
+const emit = defineEmits<{
+  (event: 'change-password'): void
+  (event: 'change-email'): void
+  (event: 'logout'): void
+}>()
 
 const auth = useAuthStore()
 const open = ref(false)
@@ -41,9 +45,10 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown)
 })
 
-function pick(action: 'password' | 'logout'): void {
+function pick(action: 'password' | 'email' | 'logout'): void {
   close()
   if (action === 'password') emit('change-password')
+  else if (action === 'email') emit('change-email')
   else emit('logout')
 }
 </script>
@@ -86,6 +91,15 @@ function pick(action: 'password' | 'logout'): void {
           >
             <Icon name="lock" :size="14" />
             修改密码
+          </button>
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[13px] text-muted transition hover:bg-raised hover:text-fg"
+            role="menuitem"
+            @click="pick('email')"
+          >
+            <Icon name="users" :size="14" />
+            修改用户名
           </button>
           <button
             type="button"

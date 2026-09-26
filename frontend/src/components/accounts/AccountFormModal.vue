@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import AccountModePicker from '@/components/ui/AccountModePicker.vue'
@@ -18,6 +18,7 @@ import type {
   Account,
   CreateAccountPayload,
   Group,
+  StartAccountOAuthPayload,
   UpstreamPlatform,
   UpdateAccountPayload,
 } from '@/api/types'
@@ -208,44 +209,206 @@ function clearExpiryTime(): void {
 }
 
 function close(): void {
+  // 关掉弹窗等于放弃这次等待：轮询必须停，否则它会一直往后端打，
+  // 直到组件被销毁。
+  stopOAuthPolling()
+  oauthPhase.value = 'idle'
   emit('update:open', false)
+}
+
+/**
+ * 浏览器授权的三个阶段。
+ *
+ * idle → waiting：点了「用浏览器登录」，已经在新标签页打开了授权页。
+ * waiting 期间这个弹窗一直留着，用户填了一半的表单也还在。
+ *
+ * 收尾有两条路，两条都会把账号建出来：
+ *   - 自动：studio 把浏览器跳回后端回调地址，后端建完号，另一个标签页落回
+ *     账号页；这个页面轮询到结果后自己收工。
+ *   - 手动：浏览器跳不回本机（面板在远程服务器上）时，用户把地址栏里那条
+ *     打不开的地址粘进来。这时回调从没被访问过，state 还挂着，所以后端能
+ *     用粘回来的 state 认出是哪次握手、沿用上面填的那些字段。
+ */
+type OAuthPhase = 'idle' | 'waiting'
+
+const oauthPhase = ref<OAuthPhase>('idle')
+const oauthState = ref('')
+const oauthCallbackUrl = ref('')
+const oauthError = ref('')
+/** 手动粘贴的内容：一条回调地址，或者一把裸密钥。 */
+const oauthPaste = ref('')
+const oauthPasting = ref(false)
+const oauthCopied = ref(false)
+
+/** 轮询定时器。onBeforeUnmount 和手动收工都要清掉，不然会一直往后端打。 */
+let oauthTimer: ReturnType<typeof setInterval> | null = null
+
+function stopOAuthPolling(): void {
+  if (oauthTimer !== null) {
+    clearInterval(oauthTimer)
+    oauthTimer = null
+  }
+}
+
+onBeforeUnmount(stopOAuthPolling)
+
+/** 把授权表单字段打包，自动和手动两条路共用。 */
+function oauthFields(): StartAccountOAuthPayload {
+  const expires = clearExpiry.value ? '' : fromLocalInputValue(expiresAt.value) || undefined
+  return {
+    name: name.value.trim(),
+    notes: notes.value,
+    concurrency: toNumber(concurrency.value),
+    priority: toNumber(priority.value),
+    rate_multiplier: toNumber(multiplier.value),
+    group_ids: selectedGroupIds(),
+    ...(expires ? { expires_at: expires } : {}),
+  }
+}
+
+/** 两条路收尾后要做的事完全一样。 */
+function finishOAuth(accountName: string): void {
+  stopOAuthPolling()
+  oauthPhase.value = 'idle'
+  toast.success(
+    accountName ? `账号「${accountName}」已创建` : '账号已创建',
+    '已完成浏览器授权',
+  )
+  emit('saved')
+  close()
 }
 
 /**
  * 用浏览器登录代替手贴密钥。
  *
- * 点了就整页跳走：授权完成后 studio 会把浏览器跳到后端回调地址，后端建完
- * 账号再把人送回本页面，结果通过 ?oauth= 传回来。所以这里不能开新标签页——
- * 结果要落在这个页面才能被读到。
+ * **在新标签页里打开**，不是整页跳走。以前是整页跳走，代价是丢了当前页面
+ * 的一切：表单填了一半的内容、滚动位置，回来还得重新找。开新标签页之后，
+ * 这个页面靠轮询知道自己该收工了——这也正是 oauthPhase 存在的理由。
  *
- * 表单里已填的字段会先存到后端，回调时用来建号，所以名称、分组这些不用
- * 在授权回来后重填。
+ * 新标签页被浏览器拦下时（弹窗拦截），退回整页跳转：那条路仍然能用，只是
+ * 结果要靠 studio 跳回账号页时带回来的 ?oauth= 来呈现，用户体验差一档，
+ * 但不至于卡死。
  */
 async function startOAuth(): Promise<void> {
   if (!validWithoutKey.value || oauthLoading.value) return
-  const selectedPlatform = platform.value
-  if (!selectedPlatform) return
+  if (!platform.value) return
 
   oauthLoading.value = true
   serverError.value = ''
+  oauthError.value = ''
   try {
-    const expires = clearExpiry.value ? '' : fromLocalInputValue(expiresAt.value) || undefined
-    const result = await accountsApi.startOAuth({
-      name: name.value.trim(),
-      notes: notes.value,
-      concurrency: toNumber(concurrency.value),
-      priority: toNumber(priority.value),
-      rate_multiplier: toNumber(multiplier.value),
-      group_ids: selectedGroupIds(),
-      ...(expires ? { expires_at: expires } : {}),
-    })
-    window.location.assign(result.auth_url)
-    // 跳转已经发出，之后的代码基本不会跑到；保持 loading 状态，
-    // 免得用户在页面卸载前又点一次，凭空多出一个待授权握手。
+    const result = await accountsApi.startOAuth(oauthFields())
+    oauthState.value = result.state
+    oauthCallbackUrl.value = result.callback_url
+    oauthPaste.value = ''
+
+    const opened = window.open(result.auth_url, '_blank', 'noopener')
+    if (!opened) {
+      // 被拦了。整页跳走是下策，但比什么都不做要好。
+      window.location.assign(result.auth_url)
+      return
+    }
+
+    oauthPhase.value = 'waiting'
+    startOAuthPolling()
   } catch (err) {
     serverError.value = toMessage(err, '发起浏览器授权失败')
+  } finally {
     oauthLoading.value = false
   }
+}
+
+/**
+ * 每两秒问一次「好了没」。
+ *
+ * 两秒是权衡的结果：快了是在对一个十分钟的窗口浪费请求，慢了用户会觉得
+ * 卡。请求本身很轻（一次内存查表）。
+ */
+function startOAuthPolling(): void {
+  stopOAuthPolling()
+  oauthTimer = setInterval(() => {
+    void pollOAuth()
+  }, 2000)
+}
+
+async function pollOAuth(): Promise<void> {
+  const state = oauthState.value
+  if (!state) return
+  try {
+    const result = await accountsApi.oauthStatus(state)
+    if (result.status === 'ok') {
+      finishOAuth(result.name)
+      return
+    }
+    if (result.status === 'error') {
+      // 失败就停止轮询：再等下去也是同一个答案。弹窗留着，用户可以直接
+      // 用手动那条路把这次授权救回来。
+      stopOAuthPolling()
+      oauthError.value = result.message
+      return
+    }
+    if (result.status === 'gone') {
+      stopOAuthPolling()
+      oauthError.value = result.message
+    }
+    // pending：继续等。
+  } catch {
+    // 轮询失败不打扰用户：可能只是一次网络抖动，下一次还会问。
+    // 真正卡住（比如登录过期）时，手动粘贴那条路仍然可用。
+  }
+}
+
+/**
+ * 手动收尾。
+ *
+ * 用在浏览器跳不回本机的情形：面板跑在远程服务器上，studio 让浏览器跳回
+ * 「跑着 cmd2api 的那台机器的回调地址」，浏览器打不开，页面就停在那儿——
+ * 而密钥正好在那条打不开的地址里。让用户把地址栏内容复制回来，这趟授权
+ * 就不算白做。
+ *
+ * 也直接接受一把裸密钥：很多人第一反应就是只复制密钥本身。
+ */
+async function completeOAuthManually(): Promise<void> {
+  const result = oauthPaste.value.trim()
+  if (!result || oauthPasting.value) return
+
+  oauthPasting.value = true
+  oauthError.value = ''
+  try {
+    const account = await accountsApi.completeOAuth({
+      result,
+      // 带上 state，后端就能沿用发起时存在那份表单字段（名称、分组、
+      // 优先级……）。粘回来的地址里其实也带 state，这是多一层保险。
+      ...(oauthState.value ? { state: oauthState.value } : {}),
+      ...oauthFields(),
+    })
+    finishOAuth(account.name)
+  } catch (err) {
+    oauthError.value = toMessage(err, '手动完成授权失败')
+  } finally {
+    oauthPasting.value = false
+  }
+}
+
+async function copyCallbackUrl(): Promise<void> {
+  if (!oauthCallbackUrl.value) return
+  try {
+    await navigator.clipboard.writeText(oauthCallbackUrl.value)
+    oauthCopied.value = true
+    setTimeout(() => {
+      oauthCopied.value = false
+    }, 1500)
+  } catch {
+    toast.error('复制失败', '请手动选中下面的地址复制')
+  }
+}
+
+/** 放弃这次等待。不撤销后端的握手——它十分钟后自己过期。 */
+function cancelOAuth(): void {
+  stopOAuthPolling()
+  oauthPhase.value = 'idle'
+  oauthError.value = ''
+  oauthPaste.value = ''
 }
 
 async function submit(): Promise<void> {
@@ -376,21 +539,120 @@ async function submit(): Promise<void> {
             浏览器授权是手贴密钥之外的另一条路，不是替代：两条路拿到的
             都是同一种 user_ 密钥，谁方便用谁。
           -->
-          <div v-if="canStartOAuth" class="mt-2 flex flex-wrap items-center gap-2">
-            <Button
-              variant="subtle"
-              size="sm"
-              :loading="oauthLoading"
-              :disabled="!validWithoutKey"
-              @click="startOAuth"
+          <template v-if="canStartOAuth">
+            <!-- 还没开始，或者放弃了等待 -->
+            <div v-if="oauthPhase === 'idle'" class="mt-2 flex flex-wrap items-center gap-2">
+              <Button
+                variant="subtle"
+                size="sm"
+                :loading="oauthLoading"
+                :disabled="!validWithoutKey"
+                @click="startOAuth"
+              >
+                <Icon name="external" :size="13" />
+                用浏览器登录
+              </Button>
+              <span class="text-2xs text-subtle">
+                在新标签页里登录，回来后自动建号
+              </span>
+            </div>
+
+            <!-- 等另一个标签页里那次授权的结果 -->
+            <div
+              v-else
+              class="mt-2 space-y-2.5 rounded-md border border-line bg-raised px-2.5 py-2.5"
             >
-              <Icon name="external" :size="13" />
-              用浏览器登录
-            </Button>
-            <span class="text-2xs text-subtle">
-              跳去 Command Code 登录，回来后自动建号
-            </span>
-          </div>
+              <div class="flex items-start gap-2">
+                <Icon
+                  v-if="!oauthError"
+                  name="refresh"
+                  :size="13"
+                  class="mt-0.5 shrink-0 animate-spin text-accent"
+                />
+                <Icon v-else name="alertCircle" :size="13" class="mt-0.5 shrink-0 text-danger" />
+                <div class="min-w-0 flex-1">
+                  <p class="text-2xs font-medium text-fg">
+                    {{ oauthError ? '这次授权没成' : '已在新标签页打开登录页' }}
+                  </p>
+                  <p class="mt-0.5 text-2xs leading-relaxed text-subtle">
+                    <template v-if="oauthError">{{ oauthError }}</template>
+                    <template v-else>
+                      登录完成后这个窗口会自己发现并建号，不用手动刷新。
+                    </template>
+                  </p>
+                </div>
+              </div>
+
+              <!--
+                手动那条路。默认折叠着：它是给「浏览器跳不回这台机器」的
+                情形用的，正常情况下用不上，摊开只会让人以为要填。
+              -->
+              <details class="group">
+                <summary
+                  class="cursor-pointer list-none text-2xs text-muted transition hover:text-fg"
+                >
+                  <span class="inline-flex items-center gap-1">
+                    <Icon name="chevronRight" :size="12" class="group-open:rotate-90" />
+                    浏览器打不开跳转后的页面？（在远程服务器上部署时常见）
+                  </span>
+                </summary>
+
+                <div class="mt-2 space-y-2">
+                  <p class="text-2xs leading-relaxed text-subtle">
+                    把浏览器地址栏里那条<strong class="font-medium text-muted">打不开</strong>的
+                    地址整条复制过来，粘在下面。密钥就在那条地址里，这样粘一次，
+                    刚才的登录就不算白做。
+                  </p>
+                  <Textarea
+                    v-model="oauthPaste"
+                    :rows="2"
+                    :mono="true"
+                    placeholder="http://127.0.0.1:8080/api/accounts/oauth/commandcode/callback?apiKey=...&state=..."
+                  />
+                  <div class="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="subtle"
+                      size="sm"
+                      :loading="oauthPasting"
+                      :disabled="!oauthPaste.trim()"
+                      @click="completeOAuthManually"
+                    >
+                      用这段地址完成
+                    </Button>
+                    <span class="text-2xs text-subtle">也可以只粘那串密钥</span>
+                  </div>
+                </div>
+              </details>
+
+              <!--
+                回调地址本身。放在「手动」之后、折叠起来：它主要是排错用的
+                （反代把 Host 改坏了的时候，一眼能看出拼成了什么）。
+              -->
+              <details class="group">
+                <summary
+                  class="cursor-pointer list-none text-2xs text-muted transition hover:text-fg"
+                >
+                  <span class="inline-flex items-center gap-1">
+                    <Icon name="chevronRight" :size="12" class="group-open:rotate-90" />
+                    查看本次的回调地址
+                  </span>
+                </summary>
+                <div class="mt-2 space-y-2">
+                  <p class="break-all font-mono text-2xs text-subtle">
+                    {{ oauthCallbackUrl }}
+                  </p>
+                  <Button variant="ghost" size="sm" @click="copyCallbackUrl">
+                    <Icon :name="oauthCopied ? 'check' : 'copy'" :size="12" />
+                    {{ oauthCopied ? '已复制' : '复制' }}
+                  </Button>
+                </div>
+              </details>
+
+              <div class="flex justify-end">
+                <Button variant="ghost" size="sm" @click="cancelOAuth">停止等待</Button>
+              </div>
+            </div>
+          </template>
         </Field>
       </div>
 

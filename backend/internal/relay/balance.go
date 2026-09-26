@@ -228,12 +228,90 @@ func (c *Client) getJSON(ctx context.Context, apiKey, path string, out any) erro
 		return fmt.Errorf("读取上游响应失败: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("上游返回 %d：%s", resp.StatusCode, snippetForError(raw))
+		return newUpstreamStatusError(resp.StatusCode, raw)
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
 		return fmt.Errorf("上游响应格式不符合预期: %w", err)
 	}
 	return nil
+}
+
+// UpstreamStatusError 是上游回非 2xx 时的错误。
+//
+// 值得单独一个类型，是因为这串东西**会一路走到用户眼前**：调用方基本都在
+// 做 `err.Error()` 然后显示出来。上游的错误体长这样——
+//
+//	{"success":false,"error":{"code":"UNAUTHORIZED","status":401,
+//	 "message":"Invalid 'Authorization' header or token"}}
+//
+// 整段塞给用户既看不懂、又会被截断成半截 JSON（实测就是这样：提示里出现
+// 了一段 `{"success":false,"error":{"code":"UNAUTHORIZED",...` 被切掉）。
+// 这里优先取上游自己写的那句话。
+type UpstreamStatusError struct {
+	// Status 是上游回的 HTTP 状态码。
+	Status int
+	// Message 是上游自己写的原因，抠不出来时为空。
+	Message string
+	// Raw 保留原始响应体：日志和排障要用，界面上不显示它。
+	Raw []byte
+}
+
+func newUpstreamStatusError(status int, body []byte) *UpstreamStatusError {
+	return &UpstreamStatusError{Status: status, Message: extractUpstreamMessage(body), Raw: body}
+}
+
+func (e *UpstreamStatusError) Error() string {
+	if e.Message != "" {
+		return fmt.Sprintf("上游返回 %d：%s", e.Status, e.Message)
+	}
+	return fmt.Sprintf("上游返回 %d：%s", e.Status, snippetForError(e.Raw))
+}
+
+// IsAuthFailure 判断是不是「这把密钥上游不认」。
+//
+// 401/403 跟 5xx 的措辞要分开：前者是凭证的问题（用户得换一把），
+// 后者是上游自己出毛病（重试就好）。混为一谈会让用户去换一把好密钥。
+func (e *UpstreamStatusError) IsAuthFailure() bool {
+	return e.Status == http.StatusUnauthorized || e.Status == http.StatusForbidden
+}
+
+// extractUpstreamMessage 从上游错误体里抠出给人看的那句话。
+//
+// 认三种形状（不同端点的封装深浅不一样）：
+//
+//	{"error":{"message":"..."}}   —— Command Code 的 /alpha 系列
+//	{"message":"..."}             —— 比较常见的扁平形状
+//	{"error":"..."}               —— error 直接是字符串
+//
+// 都认不出来就返回空串，让 Error() 退回原始响应体：至少排障时看得到。
+func extractUpstreamMessage(body []byte) string {
+	var raw struct {
+		Message string          `json:"message"`
+		Error   json.RawMessage `json:"error"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return ""
+	}
+	if msg := strings.TrimSpace(raw.Message); msg != "" {
+		return msg
+	}
+	if len(raw.Error) == 0 {
+		return ""
+	}
+	// error 可能是个对象，也可能直接是个字符串。先当对象解。
+	var nested struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(raw.Error, &nested); err == nil {
+		if msg := strings.TrimSpace(nested.Message); msg != "" {
+			return msg
+		}
+	}
+	var plain string
+	if err := json.Unmarshal(raw.Error, &plain); err == nil {
+		return strings.TrimSpace(plain)
+	}
+	return ""
 }
 
 // snippetForError 把响应体裁成一小段放进错误信息。

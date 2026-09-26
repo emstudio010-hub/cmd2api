@@ -20,6 +20,9 @@ import type {
   MeResponse,
   ModelListResponse,
   SettingsResponse,
+  AccountOAuthStatus,
+  CompleteAccountOAuthPayload,
+  EmailChangeResponse,
   StartAccountOAuthPayload,
   StartAccountOAuthResult,
   UpdateAccountPayload,
@@ -48,6 +51,18 @@ export const authApi = {
     return post<{ message: string }>('/auth/password', {
       current_password: currentPassword,
       new_password: newPassword,
+    })
+  },
+  /**
+   * 改登录用户名（也就是邮箱）。
+   *
+   * 响应里带一把新令牌：邮箱写在 JWT 声明里，换名字就得换令牌，否则本地
+   * 存的那把会一直带着旧邮箱。调用方要把它存回去。
+   */
+  changeEmail(currentPassword: string, email: string) {
+    return put<EmailChangeResponse>('/auth/profile', {
+      current_password: currentPassword,
+      email,
     })
   },
 }
@@ -95,11 +110,27 @@ export const accountsApi = {
   /**
    * 发起浏览器授权，拿到要跳过去的地址。
    *
-   * 这一步**不建账号**：账号要等 studio 把密钥带回回调地址才建得出来，
-   * 所以要跳走的是整个页面，而不是在这里等一个响应。
+   * 这一步**不建账号**：账号要等 studio 把密钥带回回调地址才建得出来。
    */
   startOAuth(payload: StartAccountOAuthPayload) {
     return post<StartAccountOAuthResult>('/accounts/oauth/commandcode', payload)
+  },
+  /**
+   * 问一句「这次授权好了没」。
+   *
+   * 授权是在另一个标签页里完成的，发起授权的这个页面靠轮询它知道结果，
+   * 于是就不必整页跳走、表单也不会丢。
+   */
+  oauthStatus(state: string) {
+    return get<AccountOAuthStatus>('/accounts/oauth/commandcode/status', { params: { state } })
+  },
+  /**
+   * 手动收尾：用户把回调地址（或裸密钥）粘回来。
+   *
+   * 浏览器跳不回本机时的兜底。走这条路建出来的账号和自动那条完全一样。
+   */
+  completeOAuth(payload: CompleteAccountOAuthPayload) {
+    return post<Account>('/accounts/oauth/commandcode/complete', payload)
   },
 }
 

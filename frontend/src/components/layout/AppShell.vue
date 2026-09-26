@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 
 import AppSidebar from '@/components/layout/AppSidebar.vue'
+import ChangeEmailModal from '@/components/layout/ChangeEmailModal.vue'
 import ChangePasswordModal from '@/components/layout/ChangePasswordModal.vue'
 import TopBar from '@/components/layout/TopBar.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -15,6 +16,7 @@ const toast = useToastStore()
 
 const sidebarOpen = ref(false)
 const passwordOpen = ref(false)
+const emailOpen = ref(false)
 
 // 路由变化时收起抽屉：移动端点完导航就该直接看到内容，
 // 而不是还要再点一次遮罩。
@@ -40,6 +42,7 @@ function logout(): void {
       <TopBar
         @toggle-sidebar="sidebarOpen = !sidebarOpen"
         @change-password="passwordOpen = true"
+        @change-email="emailOpen = true"
         @logout="logout"
       />
 
@@ -55,5 +58,6 @@ function logout(): void {
     </div>
 
     <ChangePasswordModal v-model:open="passwordOpen" />
+    <ChangeEmailModal v-model:open="emailOpen" />
   </div>
 </template>

@@ -75,6 +75,20 @@ export const useAuthStore = defineStore('auth', () => {
     await authApi.changePassword(currentPassword, newPassword)
   }
 
+  /**
+   * 换登录用户名（邮箱）。
+   *
+   * 后端会连带换一把令牌——邮箱写在 JWT 声明里，不换的话本地存的这把一直
+   * 带着旧邮箱。所以这里必须把新令牌和用户信息都存回去，否则界面上还是旧
+   * 名字，刷新一次就直接掉登录。
+   */
+  async function changeEmail(currentPassword: string, email: string): Promise<AdminUser> {
+    const result = await authApi.changeEmail(currentPassword, email)
+    applyToken(result.token)
+    user.value = result.user
+    return result.user
+  }
+
   return {
     token,
     user,
@@ -86,5 +100,6 @@ export const useAuthStore = defineStore('auth', () => {
     bootstrap,
     clearSession,
     changePassword,
+    changeEmail,
   }
 })

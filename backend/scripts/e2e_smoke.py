@@ -177,12 +177,14 @@ check(u"opencode 缺 account_mode 被拒", status == 400, (status, body))
 # 平台筛选
 # 断言"我们自己建的账号在对应平台里"，而不是全局总数 ——
 # 这样测试既能对着空库跑，也能对着已有数据的实例跑。
-status, body = call("GET", "/api/accounts?platform=opencode&keyword=" + urllib.parse.quote(u"OpenCode"),
+# 按本次运行的后缀过滤（用 RUN_ID 而不是平台名做关键词：
+# 账号名不一定含平台字样，例如 "OC NoPrefix"，按平台名过滤会漏掉它）。
+status, body = call("GET", "/api/accounts?platform=opencode&keyword=" + urllib.parse.quote(RUN_ID),
                     token=token)
-oc_names = [a["name"] for a in body.get("items", [])]
+oc_items = body.get("items", [])
 check(u"按平台筛选账号",
-      status == 200 and len(oc_names) >= 3 and all(a["platform"] == "opencode" for a in body.get("items", [])),
-      (status, oc_names))
+      status == 200 and len(oc_items) >= 3 and all(a["platform"] == "opencode" for a in oc_items),
+      (status, [a["name"] for a in oc_items]))
 
 status, body = call("GET", "/api/accounts?platform=commandcode&keyword=" + urllib.parse.quote(u"主账号-" + RUN_ID),
                     token=token)

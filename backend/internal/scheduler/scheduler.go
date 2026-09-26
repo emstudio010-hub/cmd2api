@@ -59,6 +59,16 @@ type Scheduler struct {
 
 // New 构造 Scheduler。
 func New(client *ent.Client, vault *crypto.Vault, failureThreshold int, logger *slog.Logger) *Scheduler {
+	// 阈值小于 1 等于「第一次失败就禁用」。
+	//
+	// 环境变量写成 0（或者手滑写了个负数）时，比较式恒真，一个账号抖一下就被
+	// 停掉——而这条路径是自动的、没人盯着，等到发现时整池账号可能都已经躺下了。
+	// 钳到 1 明确表示「至少失败一次才算」，比让它静默失效好。
+	if failureThreshold < 1 {
+		logger.Warn("连续失败阈值配置无效，已按 1 处理",
+			"configured", failureThreshold, "env", "HEALTH_FAILURE_THRESHOLD")
+		failureThreshold = 1
+	}
 	return &Scheduler{
 		client:           client,
 		vault:            vault,
@@ -360,35 +370,56 @@ func (s *Scheduler) MarkOverloaded(ctx context.Context, accountID int64, until t
 //
 // 返回是否本次触发了自动禁用。
 func (s *Scheduler) MarkFailure(ctx context.Context, accountID int64, cause error) bool {
-	// 带 soft-delete 过滤：已删除的账号不该再被写失败计数，
-	// 更不该被这条路径重新置成禁用状态。
-	acc, err := s.client.Account.Query().
-		Where(account.IDEQ(accountID), account.DeletedAtIsNil()).
-		Only(ctx)
-	if err != nil {
-		s.logger.Warn("读取账号失败，跳过失败计数", "account_id", accountID, "err", err)
-		return false
-	}
-	failures := acc.ConsecutiveFailures + 1
 	msg := cause.Error()
 
-	upd := s.client.Account.Update().
-		Where(account.ID(accountID)).
-		SetConsecutiveFailures(failures).
-		SetErrorMessage(msg)
-
-	disabled := failures >= s.failureThreshold
-	if disabled {
-		upd = upd.SetStatus(domain.StatusError).SetSchedulable(false)
-	}
-	if _, err := upd.Save(ctx); err != nil {
+	// 原子自增，不读-改-写。
+	//
+	// 这里原来是「查出来 +1 再写回去」，跟本节开头那句「不做读-改-写」自相
+	// 矛盾。代价不只是难看：同一个账号被打回失败时，并发请求会同时进来，
+	// 两个都读到 N、都写回 N+1，一次失败就这么丢了。consecutive_failures
+	// 于是永远涨不到阈值——**自动禁用这条兜底会晚触发，甚至不触发**，而它
+	// 恰恰是「没人盯也能停掉坏账号」的唯一保障。
+	//
+	// 带 soft-delete 过滤：已删除的账号不该再被写失败计数。
+	if _, err := s.client.Account.Update().
+		Where(account.IDEQ(accountID), account.DeletedAtIsNil()).
+		AddConsecutiveFailures(1).
+		SetErrorMessage(msg).
+		Save(ctx); err != nil {
 		s.logger.Warn("回写失败计数失败", "account_id", accountID, "err", err)
 		return false
 	}
-	if disabled {
-		s.logger.Warn("账号连续失败已达阈值，已自动禁用",
-			"account_id", accountID, "account_name", acc.Name,
-			"failures", failures, "threshold", s.failureThreshold, "cause", msg)
+
+	// 禁用判断和写入放进同一条 UPDATE。
+	//
+	// 条件里带上「阈值已越过」和「还没被禁用」，于是这个转换有且只有一次：
+	// 并发失败不会重复记日志，也不会因为读到过期的计数而漏掉禁用。改写前
+	// 那个版本是先读出来比大小，那个判断在并发下不可靠。
+	affected, err := s.client.Account.Update().
+		Where(
+			account.IDEQ(accountID),
+			account.DeletedAtIsNil(),
+			account.ConsecutiveFailuresGTE(s.failureThreshold),
+			account.StatusNEQ(domain.StatusError),
+		).
+		SetStatus(domain.StatusError).
+		SetSchedulable(false).
+		Save(ctx)
+	if err != nil {
+		s.logger.Warn("自动禁用账号失败", "account_id", accountID, "err", err)
+		return false
 	}
-	return disabled
+	if affected == 0 {
+		return false
+	}
+
+	// 名字只是为了日志好读。这一跳每次禁用才走一次，代价可以忽略。
+	name := ""
+	if acc, err := s.client.Account.Get(ctx, accountID); err == nil {
+		name = acc.Name
+	}
+	s.logger.Warn("账号连续失败已达阈值，已自动禁用",
+		"account_id", accountID, "account_name", name,
+		"threshold", s.failureThreshold, "cause", msg)
+	return true
 }

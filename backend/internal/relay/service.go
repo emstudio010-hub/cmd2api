@@ -390,11 +390,12 @@ func (s *Service) applyAccountPenalty(ctx context.Context, accountID int64, mapp
 	case mapped.IsRateLimit():
 		// 上游没给 reset 时间时由 scheduler 兜底 5 分钟。
 		s.sched.MarkRateLimited(ctx, accountID, nil)
-	case mapped.IsAuthFailure():
-		// 认证失败说明这把 key 已经不能用了，直接按失败累计，
-		// 连续几次后会被自动禁用，不需要人工盯。
-		s.sched.MarkFailure(ctx, accountID, errors.New(mapped.Message))
 	default:
+		// 其余一律按失败累计，连续几次后自动禁用。
+		//
+		// 这里原来把 IsAuthFailure 单列成一个 case，但两个分支的代码一模一样
+		// ——认证失败和别的失败走的是同一条路（都是累计到阈值才禁用）。留着
+		// 那个 case 会让人以为认证失败有特殊处理，查问题时往错的方向找。
 		s.sched.MarkFailure(ctx, accountID, errors.New(mapped.Message))
 	}
 }

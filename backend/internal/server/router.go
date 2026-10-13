@@ -94,6 +94,9 @@ func NewRouter(opts Options) *gin.Engine {
 			admin.POST("/accounts/:id/check", h.CheckAccount)
 			// 只刷余额，不探活——不消耗上游生成额度，可以随便点。
 			admin.POST("/accounts/:id/balance", h.RefreshAccountBalance)
+			// 一键刷新全部账号的余额。路径放在 :id 之前不会打架：
+			// /accounts/batch 与 /accounts/oauth/... 早已和 /accounts/:id 共存。
+			admin.POST("/accounts/balance/refresh-all", h.RefreshAllAccountBalances)
 
 			admin.GET("/groups", h.ListGroups)
 			admin.POST("/groups", h.CreateGroup)

@@ -1,6 +1,7 @@
 import { del, get, post, put } from './client'
 import type {
   Account,
+  AccountBalanceRefreshAllResult,
   AccountBalanceRefreshResult,
   AccountCheckResult,
   AccountListResponse,
@@ -102,6 +103,17 @@ export const accountsApi = {
   refreshBalance(id: number) {
     return post<AccountBalanceRefreshResult>(`/accounts/${id}/balance`, undefined, {
       timeout: 60_000,
+    })
+  },
+  /**
+   * 一键刷新**所有**账号的余额。
+   *
+   * 同样只打上游的只读接口，不消耗生成额度；但账号多时耗时随账号数增长，
+   * 所以超时给得比单个宽。
+   */
+  refreshAllBalances() {
+    return post<AccountBalanceRefreshAllResult>('/accounts/balance/refresh-all', undefined, {
+      timeout: 180_000,
     })
   },
   batchImport(payload: BatchImportPayload) {

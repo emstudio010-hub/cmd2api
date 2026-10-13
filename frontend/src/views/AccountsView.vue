@@ -56,6 +56,8 @@ const checkingId = ref<number | null>(null)
 const togglingId = ref<number | null>(null)
 /** 正在单独刷余额的账号 id。不消耗 token，但还是要给个进行中的反馈。 */
 const balanceLoadingId = ref<number | null>(null)
+/** 正在「一键刷新全部余额」。账号多时会跑一会儿，必须给进行中状态。 */
+const balanceAllLoading = ref(false)
 
 const statusOptions = [
   { label: '正常', value: 'active' },
@@ -276,6 +278,36 @@ async function refreshBalance(account: Account): Promise<void> {
   }
 }
 
+/**
+ * 一键刷新**所有**账号的余额。
+ *
+ * 后端会把刷新后的整张账号表带回来（未分页），这里按 id 合并到当前页，
+ * 而不是整表替换——替换会把分页和筛选状态一起冲掉。
+ */
+async function refreshAllBalances(): Promise<void> {
+  if (balanceAllLoading.value) return
+  balanceAllLoading.value = true
+  try {
+    const result = await accountsApi.refreshAllBalances()
+    if (Array.isArray(result.accounts) && result.accounts.length > 0) {
+      const byId = new Map(result.accounts.map((acc) => [acc.id, acc]))
+      items.value = items.value.map((item) => byId.get(item.id) ?? item)
+    }
+    const parts = [`成功 ${result.refreshed}`]
+    if (result.unsupported) parts.push(`该平台不支持 ${result.unsupported}`)
+    if (result.failed) parts.push(`失败 ${result.failed}`)
+    if (result.failed) {
+      toast.error('刷新全部余额：有账号失败', parts.join(' / '))
+    } else {
+      toast.success(`已刷新 ${result.total} 个账号的余额`, parts.join(' / '))
+    }
+  } catch (err) {
+    toast.error('刷新全部余额失败', toMessage(err))
+  } finally {
+    balanceAllLoading.value = false
+  }
+}
+
 /** 一句话概括余额，用在 toast 里。 */
 function balanceSummary(account: Account): string {
   const { remaining, total, plan_name } = account.balance
@@ -328,7 +360,29 @@ function windowsTone(account: Account): 'danger' | 'warning' | 'neutral' {
   return tones.includes('warning') ? 'warning' : 'neutral'
 }
 
-/** 窗口用量的一句话概括，例如「5h 1% · 周 22%」。没有窗口就返回空串。 */
+/**
+ * 把「这个窗口什么时候重置」写成人话，例如「2 小时 13 分后」。
+ *
+ * 上游给的是绝对时间戳，但用户真正关心的是「还要等多久」——滚动窗口是从
+ * 第一次请求开始算的，绝对时间看不出紧迫感。时间已过或拿不到都返回空串。
+ */
+function resetIn(resetAt: string | null): string {
+  if (!resetAt) return ''
+  const at = new Date(resetAt).getTime()
+  if (!Number.isFinite(at)) return ''
+  const diffMs = at - Date.now()
+  if (diffMs <= 0) return '已重置'
+  const minutes = Math.ceil(diffMs / 60_000)
+  if (minutes < 60) return `${minutes} 分后`
+  const hours = Math.floor(minutes / 60)
+  const restMinutes = minutes % 60
+  if (hours < 24) return restMinutes > 0 ? `${hours} 小时 ${restMinutes} 分后` : `${hours} 小时后`
+  const days = Math.floor(hours / 24)
+  const restHours = hours % 24
+  return restHours > 0 ? `${days} 天 ${restHours} 小时后` : `${days} 天后`
+}
+
+/** 窗口用量 + 重置倒计时，例如「5h 1%（2 小时后）· 周 100%（3 天后）」。 */
 function windowsSummary(account: Account): string {
   const parts: string[] = []
   const labels: Array<[string, AccountBalanceWindow | null]> = [
@@ -337,9 +391,34 @@ function windowsSummary(account: Account): string {
   ]
   for (const [label, window] of labels) {
     if (!window || window.cap <= 0) continue
-    parts.push(`${label} ${Math.round((window.used / window.cap) * 100)}%`)
+    const pct = `${label} ${Math.round((window.used / window.cap) * 100)}%`
+    const reset = resetIn(window.reset_at)
+    parts.push(reset ? `${pct}（${reset}）` : pct)
   }
   return parts.join(' · ')
+}
+
+/** 鼠标悬停时给出精确数值与绝对重置时间，避免只看到百分比。 */
+function windowsTitle(account: Account): string {
+  const lines = ['订阅套餐的滚动限流窗口，跟月额度是两回事']
+  const labels: Array<[string, AccountBalanceWindow | null]> = [
+    ['5 小时窗口', account.balance.five_hour],
+    ['周窗口', account.balance.weekly],
+  ]
+  for (const [label, window] of labels) {
+    if (!window || window.cap <= 0) continue
+    const used = formatMoney(window.used)
+    const cap = formatMoney(window.cap)
+    let reset = '上游未给出重置时间'
+    if (window.reset_at) {
+      const at = new Date(window.reset_at)
+      reset = Number.isFinite(at.getTime())
+        ? `${at.toLocaleString()}（${resetIn(window.reset_at)}）`
+        : '上游给的重置时间无法解析'
+    }
+    lines.push(`${label}：已用 ${used} / ${cap}，重置 ${reset}`)
+  }
+  return lines.join('\n')
 }
 
 /** 健康状态：优先看最近一次探活结论，没探过就显示未检测。 */
@@ -390,6 +469,16 @@ function healthOf(account: Account): { tone: 'success' | 'danger' | 'neutral'; t
       </Button>
 
       <div class="ml-auto flex flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          :loading="balanceAllLoading"
+          title="只刷新余额，不消耗上游生成额度；逐个账号拉取，失败不影响其他账号"
+          @click="refreshAllBalances"
+        >
+          <template #leading><Icon name="refresh" :size="13" /></template>
+          刷新全部额度
+        </Button>
         <Button variant="secondary" size="sm" :loading="loading" @click="reload">
           <template #leading><Icon name="refresh" :size="13" /></template>
           刷新
@@ -581,7 +670,7 @@ function healthOf(account: Account): { tone: 'success' | 'danger' | 'neutral'; t
                     'text-warning': windowsTone(account) === 'warning',
                     'text-subtle': windowsTone(account) === 'neutral',
                   }"
-                  title="订阅套餐的滚动限流窗口，跟月额度是两回事"
+                  :title="windowsTitle(account)"
                 >
                   {{ windowsSummary(account) }}
                 </span>

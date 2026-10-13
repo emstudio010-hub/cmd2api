@@ -31,3 +31,7 @@ frontend/*.tsbuildinfo
 .idea/
 .DS_Store
 Thumbs.db
+
+# 交叉编译出的 Linux 部署二进制（本地构建产物，不入库）
+backend/cmd2api-linux-amd64
+

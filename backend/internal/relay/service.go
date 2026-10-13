@@ -679,11 +679,67 @@ func finalOutcome(events []*CCEvent) (string, *CCUsage) {
 	return finishReason, usage
 }
 
-// record 记一笔用量（不带首 token 时间）。
+// record 记一笔用量（非流式路径）。
+//
+// 非流式请求没有流式编码器，拿不到累计统计，所以 token 由调用方直接传入。
+// 早先这里把传进来的 token 参数整个丢掉、又传 nil 编码器下去，导致非流式
+// 请求一律落库成 model=unknown、token 全 0 —— 用量与成本统计因此整段失真。
 func (s *Service) record(req *RelayRequest, accountID int64, started time.Time,
 	inputTokens, outputTokens, cachedTokens int, multiplier float64,
 	statusCode int, errMsg string) {
-	s.recordWithUsage(req, accountID, started, nil, nil, nil, statusCode, errMsg)
+	if s.recorder == nil {
+		return
+	}
+
+	rec := newUsageRecord(req, accountID, started, statusCode, errMsg)
+	rec.Stream = false
+	rec.Model = requestModel(req.Body)
+	rec.InputTokens = inputTokens
+	rec.OutputTokens = outputTokens
+	rec.CacheReadTokens = cachedTokens
+	rec.RateMultiplier = multiplier
+
+	if err := safeRecord(context.WithoutCancel(context.Background()), s.recorder, rec); err != nil {
+		s.logger.Warn("记录用量失败", "err", err, "request_id", req.RequestID)
+	}
+}
+
+// newUsageRecord 组装一条用量记录的公共字段。
+func newUsageRecord(req *RelayRequest, accountID int64, started time.Time,
+	statusCode int, errMsg string) UsageRecord {
+	groupID := req.GroupID
+	return UsageRecord{
+		UserID:         req.UserID,
+		APIKeyID:       req.APIKeyID,
+		AccountID:      accountID,
+		GroupID:        &groupID,
+		RequestID:      req.RequestID,
+		Stream:         true,
+		DurationMs:     int(time.Since(started).Milliseconds()),
+		StatusCode:     statusCode,
+		ErrorMessage:   errMsg,
+		UserAgent:      req.UserAgent,
+		IPAddress:      req.ClientIP,
+		RateMultiplier: req.RateMultiplier,
+	}
+}
+
+// requestModel 从原始请求体里取 model。
+//
+// 流式路径优先用编码器记下的模型（那才是真正发给上游的那个）；
+// 非流式路径没有编码器，只能回到请求体里取。取不到返回空串，由
+// modelOrUnknown 落成 unknown —— 但那属于异常，不该是常态。
+func requestModel(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	var probe struct {
+		Model string `json:"model"`
+	}
+	if err := json.Unmarshal(body, &probe); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(probe.Model)
 }
 
 // recordWithUsage 记一笔用量，优先取编码器里累计的统计。
@@ -694,22 +750,7 @@ func (s *Service) recordWithUsage(req *RelayRequest, accountID int64, started ti
 		return
 	}
 
-	rec := UsageRecord{
-		UserID:         req.UserID,
-		APIKeyID:       req.APIKeyID,
-		AccountID:      accountID,
-		RequestID:      req.RequestID,
-		Model:          "",
-		Stream:         true,
-		DurationMs:     int(time.Since(started).Milliseconds()),
-		StatusCode:     statusCode,
-		ErrorMessage:   errMsg,
-		UserAgent:      req.UserAgent,
-		IPAddress:      req.ClientIP,
-		RateMultiplier: req.RateMultiplier,
-	}
-	groupID := req.GroupID
-	rec.GroupID = &groupID
+	rec := newUsageRecord(req, accountID, started, statusCode, errMsg)
 
 	if firstTokenAt != nil {
 		ms := int(firstTokenAt.Sub(started).Milliseconds())
@@ -729,6 +770,11 @@ func (s *Service) recordWithUsage(req *RelayRequest, accountID int64, started ti
 		rec.CacheReadTokens = u.CacheReadInputTokens
 		rec.CacheCreationTokens = u.CacheCreationInputTokens
 		rec.Model = anthropicEnc.model
+	}
+	// 编码器可能没拿到模型名（上游首帧里没回 model）。退回请求体里的 model，
+	// 别让一条正常请求落成 unknown。
+	if rec.Model == "" {
+		rec.Model = requestModel(req.Body)
 	}
 
 	// 用量上报失败不该影响用户请求，记日志即可。

@@ -136,6 +136,19 @@ export interface AccountBalanceRefreshResult {
   account?: Account
 }
 
+/** 一键刷新全部账号余额的响应。逐个账号报结果，一个失败不影响其余。 */
+export interface AccountBalanceRefreshAllResult {
+  ok: boolean
+  total: number
+  refreshed: number
+  /** 平台本身不支持查余额（目前是 OpenCode），不是失败。 */
+  unsupported: number
+  failed: number
+  items: Array<{ id: number; name: string; supported: boolean; error?: string }>
+  /** 刷新后的整张账号表（未分页），界面按 id 合并到当前页即可。 */
+  accounts: Account[]
+}
+
 export interface Account {
   id: number
   name: string

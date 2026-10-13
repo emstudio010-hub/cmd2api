@@ -472,6 +472,56 @@ func (h *Handler) RefreshAccountBalance(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true, "account": h.toAccountDTO(acc)})
 }
 
+// RefreshAllAccountBalances 一键刷新**所有**账号的余额。
+//
+// 和单账号刷新一样只打上游的只读接口，不消耗生成额度，所以可以随便点。
+// 逐个失败不影响其余账号：每个账号的结果单独返回，界面按账号报错。
+func (h *Handler) RefreshAllAccountBalances(c *gin.Context) {
+	if h.accounts == nil {
+		fail(c, http.StatusServiceUnavailable, "账号服务未启用")
+		return
+	}
+
+	items := h.accounts.RefreshAllBalances(c.Request.Context())
+
+	var refreshed, unsupported, failed int
+	for _, it := range items {
+		switch {
+		case it.Error != "":
+			failed++
+		case !it.Supported:
+			unsupported++
+		default:
+			refreshed++
+		}
+	}
+
+	// 回带刷新后的整张账号表，界面直接替换即可，不用再拉一遍列表。
+	accs, err := h.client.Account.Query().
+		Where(account.DeletedAtIsNil()).
+		WithGroups().
+		Order(ent.Asc(account.FieldID)).
+		All(c.Request.Context())
+	if err != nil {
+		h.failInternal(c, "读取账号列表失败", err)
+		return
+	}
+	dtos := make([]accountDTO, 0, len(accs))
+	for _, acc := range accs {
+		dtos = append(dtos, h.toAccountDTO(acc))
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"ok":          true,
+		"total":       len(items),
+		"refreshed":   refreshed,
+		"unsupported": unsupported,
+		"failed":      failed,
+		"items":       items,
+		"accounts":    dtos,
+	})
+}
+
 type batchImportRequest struct {
 	// Keys 每行一个密钥，允许 "密钥" 或 "名称,密钥" 两种写法。
 	Keys     string `json:"keys" binding:"required"`

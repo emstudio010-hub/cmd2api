@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"cmd2api/ent"
@@ -497,6 +498,80 @@ func (s *AccountService) RefreshBalance(ctx context.Context, id int64) (*relay.B
 	result := s.relayClient.FetchBalance(ctx, target)
 	s.applyBalanceResult(ctx, acc, result)
 	return &result, nil
+}
+
+// RefreshAllBalanceItem 是「一键刷新全部余额」里单个账号的结果。
+//
+// Supported 为 false 表示该平台查不了余额（目前是 OpenCode），这不是失败。
+type RefreshAllBalanceItem struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Supported bool   `json:"supported"`
+	Error     string `json:"error,omitempty"`
+}
+
+// refreshAllBalanceConcurrency 是刷新全部余额时的并发上限。
+//
+// 上游余额接口是只读的、很轻（两个 GET），账号一多串行会等很久；
+// 但也不该一次把上游打满，保守取 4。
+const refreshAllBalanceConcurrency = 4
+
+// RefreshAllBalances 刷新所有未删除账号的余额。
+//
+// 只打上游的只读接口，不消耗生成额度，所以可以做成随便点的按钮。
+// 每个账号单独超时：一个卡死的账号只影响它自己，不拖垮整轮刷新。
+//
+// 账号目标（含解密后的密钥）先在主协程里顺序解析完，再并发发请求——
+// 调度器不是为并发读取设计的，把它的调用圈在单协程里最省心，
+// 而真正慢的是网络，那部分照样并发。
+func (s *AccountService) RefreshAllBalances(ctx context.Context) []RefreshAllBalanceItem {
+	accs, err := s.client.Account.Query().
+		Where(account.DeletedAtIsNil()).
+		Order(ent.Asc(account.FieldID)).
+		All(ctx)
+	if err != nil {
+		s.logger.Warn("刷新全部余额时读取账号列表失败", "err", err)
+		return nil
+	}
+
+	items := make([]RefreshAllBalanceItem, len(accs))
+	targets := make([]*scheduler.Target, len(accs))
+	for i, acc := range accs {
+		items[i] = RefreshAllBalanceItem{ID: acc.ID, Name: acc.Name}
+		t, targetErr := s.sched.TargetByAccountID(ctx, acc.ID)
+		if targetErr != nil {
+			items[i].Error = "读取账号密钥失败，请重新录入"
+			continue
+		}
+		targets[i] = t
+	}
+
+	sem := make(chan struct{}, refreshAllBalanceConcurrency)
+	var wg sync.WaitGroup
+	for i := range accs {
+		if targets[i] == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			cctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+			defer cancel()
+
+			result := s.relayClient.FetchBalance(cctx, targets[i])
+			s.applyBalanceResult(cctx, accs[i], result)
+
+			items[i].Supported = result.Supported
+			if result.Err != nil {
+				items[i].Error = result.Err.Error()
+			}
+		}(i)
+	}
+	wg.Wait()
+	return items
 }
 
 // applyBalanceResult 把余额结果写回账号。

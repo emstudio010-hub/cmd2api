@@ -93,6 +93,11 @@ type costBreakdown struct {
 //
 // 注意：cmd2api 没有支付与充值，这里的金额只是**估算口径**，用于用量分析
 // 和相对比较，不对应任何真实扣款。上游是订阅制，真实成本与 token 数不成正比。
+//
+// 缓存读单独计价：Command Code 的缓存读单价只有输入价的 1%~20%，而实际流量里
+// 缓存读往往占大头（长期会话会把整段上下文反复送上去）。按输入价算会系统性
+// 高估成本，所以价格表里单列一档。落库时缓存读费用并入 input_cost —— 表结构
+// 里没有单独的列，而且两者在语义上都属于「输入侧」。
 func calculateCost(rec relay.UsageRecord) (costBreakdown, float64) {
 	multiplier := rec.RateMultiplier
 	if multiplier <= 0 {
@@ -110,50 +115,131 @@ func calculateCost(rec relay.UsageRecord) (costBreakdown, float64) {
 	input := float64(rec.InputTokens) / perMillion * price.Input
 	output := float64(rec.OutputTokens) / perMillion * price.Output
 
+	// 价目表里没给缓存读价时回退到输入价：宁可高估，也不要凭空给一个折扣。
+	cachePrice := price.CacheRead
+	if cachePrice <= 0 {
+		cachePrice = price.Input
+	}
+	cached := float64(rec.CacheReadTokens) / perMillion * cachePrice
+
 	return costBreakdown{
-		InputCost:  input * multiplier,
+		InputCost:  (input + cached) * multiplier,
 		OutputCost: output * multiplier,
-		TotalCost:  (input + output) * multiplier,
+		TotalCost:  (input + cached + output) * multiplier,
 	}, multiplier
 }
 
 // ModelPrice 是每百万 token 的美元单价。
+//
+// 单位与 Command Code 官网价目表一致：美元 / 百万 token。
 type ModelPrice struct {
 	Input  float64
 	Output float64
+	// CacheRead 是缓存读取的单价；0 表示价目表里没有这一档，
+	// 计算时回退到 Input。
+	CacheRead float64
 }
 
-// priceTable 是内置价格表，单位：美元 / 百万 token。
+// priceTable 是 Command Code 的价目表，单位：美元 / 百万 token。
 //
-// 这是**参考价**，用于让用量统计有可比的量纲。上游是订阅制，实际不按 token 计费。
-// 想调整直接改这里，或在后台设置里覆盖（见 settings）。
+// 数据来源：commandcode.ai 官网价目表（Pricing & Limits / Go 套餐页）。
+// 这是**参考价**，用于让用量统计有可比的量纲——上游是订阅制（$1 买 $10 额度），
+// 实际不按 token 扣钱，所以这里的数字是「如果按官方牌价买」的口径。
+//
+// 同一张表要覆盖两套命名：上游对同一模型有带 vendor 前缀的
+// "z-ai/glm-5.3-flashx" 和不带前缀的 "glm-5.3-flashx" 两种写法，取决于
+// 请求方转发的是哪一套 ID。只写一套会让另一套静默记成 0 成本——之前就是这么
+// 漏掉整个 glm-5.3-flashx 的。
 var priceTable = map[string]ModelPrice{
-	"claude-opus-4-8":              {Input: 15, Output: 75},
-	"claude-opus-4-7":              {Input: 15, Output: 75},
-	"claude-sonnet-4-6":            {Input: 3, Output: 15},
-	"claude-haiku-4-5-20251001":    {Input: 1, Output: 5},
-	"gpt-5.5":                      {Input: 1.25, Output: 10},
-	"gpt-5.4":                      {Input: 1.25, Output: 10},
-	"gpt-5.4-mini":                 {Input: 0.25, Output: 2},
-	"gpt-5.3-codex":                {Input: 1.25, Output: 10},
-	"deepseek/deepseek-v4-pro":     {Input: 0.6, Output: 2.4},
-	"deepseek/deepseek-v4-flash":   {Input: 0.15, Output: 0.6},
-	"moonshotai/Kimi-K2.6":         {Input: 0.6, Output: 2.5},
-	"moonshotai/Kimi-K2.5":         {Input: 0.6, Output: 2.5},
-	"zai-org/GLM-5.1":              {Input: 0.6, Output: 2.2},
-	"zai-org/GLM-5":                {Input: 0.6, Output: 2.2},
-	"MiniMaxAI/MiniMax-M3":         {Input: 0.3, Output: 1.2},
-	"MiniMaxAI/MiniMax-M2.7":       {Input: 0.3, Output: 1.2},
-	"MiniMaxAI/MiniMax-M2.5":       {Input: 0.3, Output: 1.2},
-	"Qwen/Qwen3.6-Max-Preview":     {Input: 1.2, Output: 6},
-	"Qwen/Qwen3.6-Plus":            {Input: 0.4, Output: 1.2},
-	"Qwen/Qwen3.7-Max":             {Input: 1.2, Output: 6},
-	"stepfun/Step-3.7-Flash":       {Input: 0.2, Output: 0.8},
-	"stepfun/Step-3.5-Flash":       {Input: 0.2, Output: 0.8},
-	"xiaomi/mimo-v2.5-pro":         {Input: 0.4, Output: 1.5},
-	"xiaomi/mimo-v2.5":             {Input: 0.2, Output: 0.8},
-	"google/gemini-3.5-flash":      {Input: 0.3, Output: 2.5},
-	"google/gemini-3.1-flash-lite": {Input: 0.1, Output: 0.4},
+	// ---- 智谱 GLM ----
+	"glm-5.3-flashx":      {Input: 0.37, Output: 1.25, CacheRead: 0.075},
+	"z-ai/glm-5.3-flashx": {Input: 0.37, Output: 1.25, CacheRead: 0.075},
+	"glm-5.3-flash":       {Input: 0.15, Output: 0.50, CacheRead: 0.03},
+	"z-ai/glm-5.3-flash":  {Input: 0.15, Output: 0.50, CacheRead: 0.03},
+	"glm-5.3":             {Input: 1.40, Output: 4.40, CacheRead: 0.26},
+	"zai-org/GLM-5.3":     {Input: 1.40, Output: 4.40, CacheRead: 0.26},
+	"glm-5.2-fast":        {Input: 3.00, Output: 10.25, CacheRead: 0.50},
+	"glm-5.2":             {Input: 1.40, Output: 4.40, CacheRead: 0.26},
+	"glm-5.1":             {Input: 1.40, Output: 4.40, CacheRead: 0.26},
+	"zai-org/GLM-5.1":     {Input: 1.40, Output: 4.40, CacheRead: 0.26},
+	"glm-5":               {Input: 1.00, Output: 3.20, CacheRead: 0.20},
+	"zai-org/GLM-5":       {Input: 1.00, Output: 3.20, CacheRead: 0.20},
+
+	// ---- DeepSeek ----
+	"deepseek-v4.1-flash":               {Input: 0.15, Output: 0.60, CacheRead: 0.003},
+	"deepseek/deepseek-v4.1-flash":      {Input: 0.15, Output: 0.60, CacheRead: 0.003},
+	"deepseek-v4.1-flash-fast":          {Input: 0.16, Output: 0.58, CacheRead: 0.016},
+	"deepseek/deepseek-v4.1-flash-fast": {Input: 0.16, Output: 0.58, CacheRead: 0.016},
+	"deepseek-v4-flash":                 {Input: 0.15, Output: 0.60, CacheRead: 0.003},
+	"deepseek/deepseek-v4-flash":        {Input: 0.15, Output: 0.60, CacheRead: 0.003},
+	"deepseek-v4-flash-fast":            {Input: 0.28, Output: 0.56, CacheRead: 0.07},
+	"deepseek/deepseek-v4-flash-fast":   {Input: 0.28, Output: 0.56, CacheRead: 0.07},
+	"deepseek-v4-flash-vision-exp":      {Input: 0.15, Output: 0.60, CacheRead: 0.003},
+	"deepseek-v4-pro":                   {Input: 0.66, Output: 1.98, CacheRead: 0.022},
+	"deepseek/deepseek-v4-pro":          {Input: 0.66, Output: 1.98, CacheRead: 0.022},
+
+	// ---- 阿里 Qwen ----
+	"Qwen/Qwen3.8-Flash":       {Input: 0.16, Output: 0.47, CacheRead: 0.016},
+	"Qwen3.8-Flash":            {Input: 0.16, Output: 0.47, CacheRead: 0.016},
+	"Qwen/Qwen3.8-Omni-Flash":  {Input: 0.15, Output: 0.47, CacheRead: 0.016},
+	"Qwen/Qwen3.8-Max":         {Input: 2.00, Output: 6.00, CacheRead: 0.25},
+	"Qwen/Qwen3.8-Max-0902":    {Input: 2.00, Output: 6.00, CacheRead: 0.25},
+	"Qwen/Qwen3.8-27B":         {Input: 0.40, Output: 3.00, CacheRead: 0.04},
+	"Qwen/Qwen3.7-Max":         {Input: 2.50, Output: 7.50, CacheRead: 0.50},
+	"Qwen/Qwen3.7-Plus":        {Input: 0.40, Output: 1.60, CacheRead: 0.08},
+	"Qwen/Qwen3.7-Flash":       {Input: 0.03, Output: 0.13, CacheRead: 0.006},
+	"Qwen/Qwen3.6-Max-Preview": {Input: 1.30, Output: 7.80, CacheRead: 0.26},
+	"Qwen/Qwen3.6-Plus":        {Input: 0.50, Output: 3.00, CacheRead: 0.10},
+
+	// ---- 小米 MiMo ----
+	"mimo-v2.6-flash":        {Input: 0.14, Output: 0.28, CacheRead: 0.0028},
+	"xiaomi/mimo-v2.6-flash": {Input: 0.14, Output: 0.28, CacheRead: 0.0028},
+	"mimo-v2.6-pro":          {Input: 0.435, Output: 0.87, CacheRead: 0.0036},
+	"xiaomi/mimo-v2.6-pro":   {Input: 0.435, Output: 0.87, CacheRead: 0.0036},
+	"mimo-v2.5":              {Input: 0.14, Output: 0.28, CacheRead: 0.0028},
+	"xiaomi/mimo-v2.5":       {Input: 0.14, Output: 0.28, CacheRead: 0.0028},
+	"mimo-v2.5-pro":          {Input: 0.435, Output: 0.87, CacheRead: 0.0036},
+	"xiaomi/mimo-v2.5-pro":   {Input: 0.435, Output: 0.87, CacheRead: 0.0036},
+
+	// ---- MiniMax ----
+	"MiniMaxAI/MiniMax-M3":   {Input: 0.30, Output: 1.20, CacheRead: 0.06},
+	"MiniMax-M3":             {Input: 0.30, Output: 1.20, CacheRead: 0.06},
+	"MiniMaxAI/MiniMax-M2.7": {Input: 0.30, Output: 1.20, CacheRead: 0.06},
+	"MiniMax-M2.7":           {Input: 0.30, Output: 1.20, CacheRead: 0.06},
+	"MiniMaxAI/MiniMax-M2.5": {Input: 0.30, Output: 1.20, CacheRead: 0.03},
+	"MiniMax-M2.5":           {Input: 0.30, Output: 1.20, CacheRead: 0.03},
+
+	// ---- OpenAI 系（Command Code 上的名字）----
+	"gpt-6-luna":   {Input: 0.10, Output: 0.50, CacheRead: 0.01},
+	"gpt-5.6-luna": {Input: 0.20, Output: 1.20, CacheRead: 0.02},
+
+	// ---- Kimi ----
+	"kimi-k3":                    {Input: 3.00, Output: 15.00, CacheRead: 0.30},
+	"moonshotai/Kimi-K3":         {Input: 3.00, Output: 15.00, CacheRead: 0.30},
+	"kimi-k2.7-code":             {Input: 0.95, Output: 4.00, CacheRead: 0.19},
+	"moonshotai/Kimi-K2.7-Code":  {Input: 0.95, Output: 4.00, CacheRead: 0.19},
+	"kimi-k2.7-code-highspeed":   {Input: 1.90, Output: 8.00, CacheRead: 0.38},
+	"kimi-k2.6":                  {Input: 0.95, Output: 4.00, CacheRead: 0.16},
+	"moonshotai/Kimi-K2.6":       {Input: 0.95, Output: 4.00, CacheRead: 0.16},
+	"kimi-k2.5":                  {Input: 0.60, Output: 3.00, CacheRead: 0.10},
+	"moonshotai/Kimi-K2.5":       {Input: 0.60, Output: 3.00, CacheRead: 0.10},
+
+	// ---- 其余官方目录里的模型 ----
+	"step-5-preview":             {Input: 1.00, Output: 2.70, CacheRead: 0.05},
+	"step-3.7-flash":             {Input: 0.20, Output: 1.15, CacheRead: 0.04},
+	"stepfun/Step-3.7-Flash":     {Input: 0.20, Output: 1.15, CacheRead: 0.04},
+	"step-3.5-flash":             {Input: 0.09, Output: 0.30, CacheRead: 0.02},
+	"stepfun/Step-3.5-Flash":     {Input: 0.09, Output: 0.30, CacheRead: 0.02},
+	"grok-4.5":                   {Input: 2.00, Output: 6.00, CacheRead: 0.50},
+	"mistral-large-4":            {Input: 1.36, Output: 4.18, CacheRead: 0.14},
+	"longcat-2.0":                {Input: 0.30, Output: 1.20, CacheRead: 0.006},
+	"nemotron-3-ultra":           {Input: 0.60, Output: 2.40, CacheRead: 0.12},
+	"tencent-hy4-preview":        {Input: 0.834, Output: 2.501, CacheRead: 0.042},
+	"tencent-hy3":                {Input: 0.14, Output: 0.58, CacheRead: 0.035},
+	"inkling":                    {Input: 1.00, Output: 4.05, CacheRead: 0.17},
+	"inkling-small":              {Input: 0.50, Output: 1.20, CacheRead: 0.10},
+	"muse-spark-1.3-contributor": {Input: 0.10, Output: 0.20, CacheRead: 0.002},
+	"muse-spark-1.2-contributor": {Input: 0.10, Output: 0.20, CacheRead: 0.002},
 }
 
 // openCodePriceTable 是 OpenCode 上游的模型定价。
